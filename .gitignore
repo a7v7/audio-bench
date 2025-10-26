@@ -1,40 +1,16 @@
-# Prerequisites
-*.d
+# Compiled binaries
+bin/*
+!bin/.gitkeep
 
 # Object files
+obj/
 *.o
-*.ko
 *.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
 
 # Executables
 *.exe
 *.out
 *.app
-*.i*86
-*.x86_64
-*.hex
 
 # Debug files
 *.dSYM/
@@ -42,14 +18,52 @@
 *.idb
 *.pdb
 
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+# Data files (if large)
+data/*.wav
+data/*.raw
+!data/sample*.wav
 
-# debug information files
-*.dwo
+# Output files
+output/
+results/
+*.png
+*.pdf
+*.eps
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.log
+*.dat
+*.gp.tmp
+
+# Build artifacts
+*.a
+*.la
+*.lo
+.libs/
+.deps/
+
+# Documentation builds
+docs/_build/
+docs/html/
+docs/latex/
