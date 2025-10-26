@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(chmod:*)",
+      "Bash(python scripts/ab_project_create.py:*)",
+      "Bash(python3:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
