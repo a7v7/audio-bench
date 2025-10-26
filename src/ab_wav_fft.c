@@ -23,6 +23,7 @@
 //------------------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <sndfile.h>
 #include <fftw3.h>

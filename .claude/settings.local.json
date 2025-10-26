@@ -3,7 +3,15 @@
     "allow": [
       "Bash(chmod:*)",
       "Bash(python scripts/ab_project_create.py:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(echo:*)",
+      "Bash(export PATH=\"/ucrt64/bin:$PATH\")",
+      "Read(//c/msys64//**)",
+      "Bash(export PATH=\"/c/msys64/ucrt64/bin:$PATH\")",
+      "Read(//c/Users/acver/**)",
+      "Bash(gcc:*)",
+      "Bash(make:*)",
+      "Bash(mingw32-make:*)"
     ],
     "deny": [],
     "ask": []

@@ -2,7 +2,7 @@
 
 CC = gcc
 CFLAGS = -Wall -O2 -std=c11
-LDFLAGS = -lm -lsndfile -lfftw3
+LDFLAGS = -lm -lsndfile -lfftw3 -lpopt -lportaudio
 
 # Directories
 SRC_DIR = src
