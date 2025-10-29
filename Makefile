@@ -81,6 +81,8 @@ help:
 	@echo "  install   - Install binaries to /c/msys64/opt and update ~/.bash_profile"
 	@echo "  uninstall - Remove installed binaries"
 	@echo "  help      - Show this help message"
+	@echo "Make sure to set path for /opt/audio-bench/bin and /opt/audio-bench/scripts"
+	@echo "Make sure to export AUDIO_BENCH to point to /opt/audio-bench"
 
 #-------------------------------------------------------------------------------
 # Clean build artifacts
