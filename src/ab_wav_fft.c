@@ -52,9 +52,12 @@ int main(int argc, char *argv[])
     int sample_rate = 0;  // 0 means use file's native sample rate
     int quiet = 0;  // 0 = show diagnostic output, 1 = quiet mode
     int avg_count = 1;  // Number of FFTs to average (default: 1 = no averaging)
+    int version_flag = 0;
 
     // Define popt options table
     struct poptOption options[] = {
+        {"version", 'v', POPT_ARG_NONE, &version_flag, 0,
+            "Show version information", NULL},
         {"input", 'i', POPT_ARG_STRING, &input_file, 0,
             "Input WAV file", "FILE"},
         {"output", 'o', POPT_ARG_STRING, &output_file, 0,
@@ -82,6 +85,15 @@ int main(int argc, char *argv[])
                 poptStrerror(rc));
         poptFreeContext(opt_context);
         return 1;
+    }
+
+    // Handle version mode
+    if (version_flag) {
+        printf("ab_wav_fft version 1.0.0\n");
+        printf("WAV file FFT analyzer for audio-bench\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        poptFreeContext(opt_context);
+        return 0;
     }
 
     // Validate required parameters

@@ -454,6 +454,7 @@ int main(int argc, const char **argv)
 {
     /* Command-line options */
     int list_flag = 0;
+    int version_flag = 0;
     int info_device_index = -1;
     int device_index = -1;
     char *output_file = NULL;
@@ -463,6 +464,8 @@ int main(int argc, const char **argv)
     double duration = DEFAULT_DURATION;
 
     struct poptOption options[] = {
+        {"version", 'v', POPT_ARG_NONE, &version_flag, 0,
+         "Show version information", NULL},
         {"list", 'l', POPT_ARG_NONE, &list_flag, 0,
          "List all available audio input devices", NULL},
         {"info", 'i', POPT_ARG_INT, &info_device_index, 0,
@@ -501,6 +504,15 @@ int main(int argc, const char **argv)
                 poptStrerror(rc));
         poptFreeContext(popt_ctx);
         return 1;
+    }
+
+    /* Handle version mode */
+    if (version_flag) {
+        printf("ab_acq version 1.0.0\n");
+        printf("Audio acquisition tool for audio-bench\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        poptFreeContext(popt_ctx);
+        return 0;
     }
 
     /* Handle list mode */

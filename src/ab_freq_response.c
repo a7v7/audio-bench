@@ -29,6 +29,7 @@
 #include <string.h>
 #include <portaudio.h>
 #include <fftw3.h>
+#include <popt.h>
 
 #define SAMPLE_RATE 48000
 #define FRAMES_PER_BUFFER 512
@@ -192,11 +193,51 @@ void calculate_frequency_response(float *input_signal, float *output_signal,
     fftw_free(out_recorded);
 }
 
-int main(void) {
+int main(int argc, const char **argv) {
+    /* Command-line options */
+    int version_flag = 0;
+
+    struct poptOption options[] = {
+        {"version", 'v', POPT_ARG_NONE, &version_flag, 0,
+         "Show version information", NULL},
+        POPT_AUTOHELP
+        POPT_TABLEEND
+    };
+
+    poptContext popt_ctx = poptGetContext(NULL, argc, argv, options, 0);
+    poptSetOtherOptionHelp(popt_ctx,
+        "[OPTIONS]\n\n"
+        "Frequency Response Measurement Tool for audio-bench.\n\n"
+        "This tool generates a logarithmic sine sweep, plays it through\n"
+        "the audio interface, records the response, and calculates the\n"
+        "frequency response.\n\n"
+        "Example:\n"
+        "  ab_freq_response           # Run frequency response measurement\n");
+
+    int rc = poptGetNextOpt(popt_ctx);
+    if (rc < -1) {
+        fprintf(stderr, "Error: %s: %s\n",
+                poptBadOption(popt_ctx, POPT_BADOPTION_NOALIAS),
+                poptStrerror(rc));
+        poptFreeContext(popt_ctx);
+        return 1;
+    }
+
+    /* Handle version mode */
+    if (version_flag) {
+        printf("ab_freq_response version 1.0.0\n");
+        printf("Frequency Response Measurement Tool for audio-bench\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        poptFreeContext(popt_ctx);
+        return 0;
+    }
+
+    poptFreeContext(popt_ctx);
+
     PaError err;
     PaStream *stream;
     AudioData data;
-    
+
     printf("Frequency Response Measurement Tool\n");
     printf("====================================\n\n");
     

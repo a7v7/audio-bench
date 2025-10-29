@@ -38,6 +38,7 @@
 #include <string.h>
 #include <math.h>
 #include <sndfile.h>
+#include <popt.h>
 
 #define BUFFER_SIZE 4096
 
@@ -51,13 +52,6 @@ typedef struct {
     int channels;
 } AudioStats;
 
-void print_usage(const char *progname) {
-    printf("Usage: %s <input.wav> [options]\n", progname);
-    printf("Options:\n");
-    printf("  -o <file>    Output results to file\n");
-    printf("  -v           Verbose output\n");
-    printf("  -h           Show this help\n");
-}
 
 void print_file_info(SF_INFO *info) {
     printf("Audio File Information:\n");
@@ -161,20 +155,76 @@ void print_stats(AudioStats *stats) {
 }
 
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
-        print_usage(argv[0]);
+    /* Command-line options */
+    char *input_file = NULL;
+    char *output_file = NULL;
+    int verbose = 0;
+    int version_flag = 0;
+
+    struct poptOption options[] = {
+        {"version", 'v', POPT_ARG_NONE, &version_flag, 0,
+         "Show version information", NULL},
+        {"output", 'o', POPT_ARG_STRING, &output_file, 0,
+         "Output results to file", "FILE"},
+        {"verbose", 'V', POPT_ARG_NONE, &verbose, 0,
+         "Verbose output", NULL},
+        POPT_AUTOHELP
+        POPT_TABLEEND
+    };
+
+    poptContext popt_ctx = poptGetContext(NULL, argc, (const char **)argv, options, 0);
+    poptSetOtherOptionHelp(popt_ctx,
+        "<input.wav> [OPTIONS]\n\n"
+        "Basic WAV file analyzer for audio-bench.\n\n"
+        "Examples:\n"
+        "  ab_audio_analyze input.wav           # Analyze audio file\n"
+        "  ab_audio_analyze input.wav -o out.txt # Save results to file\n"
+        "  ab_audio_analyze input.wav -V        # Verbose output\n");
+
+    int rc = poptGetNextOpt(popt_ctx);
+    if (rc < -1) {
+        fprintf(stderr, "Error: %s: %s\n",
+                poptBadOption(popt_ctx, POPT_BADOPTION_NOALIAS),
+                poptStrerror(rc));
+        poptFreeContext(popt_ctx);
         return 1;
     }
-    
-    const char *input_file = argv[1];
+
+    /* Handle version mode */
+    if (version_flag) {
+        printf("ab_audio_analyze version 1.0.0\n");
+        printf("Basic WAV file analyzer for audio-bench\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        poptFreeContext(popt_ctx);
+        return 0;
+    }
+
+    /* Get remaining argument (input file) */
+    const char *remaining = poptGetArg(popt_ctx);
+    if (remaining) {
+        input_file = strdup(remaining);
+    }
+
+    if (!input_file) {
+        fprintf(stderr, "Error: Input file required\n");
+        poptPrintUsage(popt_ctx, stderr, 0);
+        poptFreeContext(popt_ctx);
+        return 1;
+    }
+
+    poptFreeContext(popt_ctx);
+
+    /* Perform analysis */
     AudioStats stats;
-    
     if (analyze_audio(input_file, &stats) != 0) {
+        free(input_file);
         return 1;
     }
-    
+
     print_stats(&stats);
-    
+
     printf("\nAnalysis complete.\n");
+
+    free(input_file);
     return 0;
 }

@@ -11,7 +11,13 @@
       "Read(//c/Users/acver/**)",
       "Bash(gcc:*)",
       "Bash(make:*)",
-      "Bash(mingw32-make:*)"
+      "Bash(mingw32-make:*)",
+      "Bash(./bin/ab_acq.exe:*)",
+      "Bash(./bin/ab_audio_analyze.exe:*)",
+      "Bash(./bin/ab_freq_response.exe:*)",
+      "Bash(./bin/ab_wav_fft.exe:*)",
+      "Bash(./bin/ab_wave_list.exe:*)",
+      "Read(//c/**)"
     ],
     "deny": [],
     "ask": []
