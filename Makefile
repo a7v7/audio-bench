@@ -97,14 +97,21 @@ INSTALL_DIR = /c/msys64/opt/audio-bench
 install: all
 	@echo "Creating installation directory $(INSTALL_DIR)"
 	mkdir -p $(INSTALL_DIR)
-	@echo "Installing binaries to $(INSTALL_DIR)"
-	cp $(BIN_DIR)/* $(INSTALL_DIR)/
+	@echo "Installing binaries to $(INSTALL_DIR)/bin"
+	mkdir -p $(INSTALL_DIR)/bin
+	cp $(BIN_DIR)/* $(INSTALL_DIR)/bin
+	@echo "Installing gnuplot scripts to $(INSTALL_DIR)/gnuplot"
+	mkdir -p $(INSTALL_DIR)/gnuplot
+	cp gnuplot/* $(INSTALL_DIR)/gnuplot
+	@echo "Installing python scripts to $(INSTALL_DIR)/scripts"
+	mkdir -p $(INSTALL_DIR)/scripts
+	cp scripts/* $(INSTALL_DIR)/scripts
 	@echo "Installation complete."
 
 #-------------------------------------------------------------------------------
 # Uninstall
 #-------------------------------------------------------------------------------
 uninstall:
-	@echo "Removing binaries from $(INSTALL_DIR)"
-	rm -f $(INSTALL_DIR)
+	@echo "Removing $(INSTALL_DIR)"
+	rm -rf $(INSTALL_DIR)
 	@echo "Note: PATH entry in ~/.bash_profile must be removed manually if desired"
