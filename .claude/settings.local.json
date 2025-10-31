@@ -1,8 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(done)",
-      "Bash(for prog in ab_*.exe)"
+      "Bash(make:*)",
+      "Bash(./bin/ab_list_dev:*)",
+      "Bash(/c/msys64/opt/audio-bench/bin/ab_list_dev:*)"
     ],
     "deny": [],
     "ask": []

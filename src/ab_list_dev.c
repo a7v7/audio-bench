@@ -52,6 +52,63 @@ typedef enum {
 } DeviceFilter;
 
 /*
+ * Count display width of UTF-8 string (number of visible characters)
+ *
+ * @param str: UTF-8 encoded string
+ * @return: Number of display characters
+ */
+static size_t utf8_display_width(const char *str)
+{
+    if (!str) return 0;
+
+    size_t count = 0;
+    const unsigned char *s = (const unsigned char *)str;
+
+    while (*s) {
+        /* Count only the start of UTF-8 sequences, not continuation bytes */
+        /* UTF-8 continuation bytes start with bits 10xxxxxx (0x80-0xBF) */
+        if ((*s & 0xC0) != 0x80) {
+            count++;
+        }
+        s++;
+    }
+
+    return count;
+}
+
+/*
+ * Check if a device name appears truncated
+ *
+ * @param name: Device name to check
+ * @return: 1 if truncated, 0 otherwise
+ */
+static int is_name_truncated(const char *name)
+{
+    if (!name) return 0;
+
+    size_t len = strlen(name);
+    if (len == 0) return 0;
+
+    /* Check for trailing space (common truncation indicator) */
+    if (name[len - 1] == ' ') {
+        return 1;
+    }
+
+    /* Check for unmatched parentheses */
+    int paren_count = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (name[i] == '(') paren_count++;
+        if (name[i] == ')') paren_count--;
+    }
+
+    if (paren_count != 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/*
  * List audio devices based on filter mode
  *
  * @param filter: Device filter (FILTER_ALL, FILTER_INPUT, FILTER_OUTPUT)
@@ -64,12 +121,13 @@ static int list_devices(DeviceFilter filter)
     const PaDeviceInfo *device_info;
     const PaHostApiInfo *host_info;
     int device_count = 0;
+    int mme_truncation_detected = 0;
     size_t max_name_len = 11;  // Minimum: "Device Name"
     size_t max_host_len = 8;   // Minimum: "Host API"
 
 #ifdef _WIN32
-    /* Set console output to ANSI code page to handle UTF characters */
-    SetConsoleOutputCP(CP_ACP);
+    /* Set console output to UTF-8 to handle Unicode characters */
+    SetConsoleOutputCP(CP_UTF8);
 #endif
 
     err = Pa_Initialize();
@@ -115,6 +173,11 @@ static int list_devices(DeviceFilter filter)
         if (show_device) {
             size_t name_len = strlen(device_info->name);
             size_t host_len = strlen(host_info->name);
+
+            /* Add 3 chars for "..." if name appears truncated */
+            if (is_name_truncated(device_info->name)) {
+                name_len += 3;
+            }
 
             if (name_len > max_name_len) {
                 max_name_len = name_len;
@@ -191,9 +254,22 @@ static int list_devices(DeviceFilter filter)
                 snprintf(out_ch_str, sizeof(out_ch_str), "-");
             }
 
+            /* Check for truncation and format device name accordingly */
+            char formatted_name[256];
+            if (is_name_truncated(device_info->name)) {
+                snprintf(formatted_name, sizeof(formatted_name), "%s...", device_info->name);
+
+                /* Track if this is MME truncation */
+                if (strcmp(host_info->name, "MME") == 0) {
+                    mme_truncation_detected = 1;
+                }
+            } else {
+                snprintf(formatted_name, sizeof(formatted_name), "%s", device_info->name);
+            }
+
             printf("%-4d %-*s %-*s %-8s %-8s %.0f Hz\n",
                    i,
-                   (int)max_name_len, device_info->name,
+                   (int)max_name_len, formatted_name,
                    (int)max_host_len, host_info->name,
                    in_ch_str,
                    out_ch_str,
@@ -209,6 +285,13 @@ static int list_devices(DeviceFilter filter)
     }
     printf("\n");
     printf("Total devices found: %d\n", device_count);
+
+    /* Add note about MME truncation if detected */
+    if (mme_truncation_detected) {
+        printf("\nNote: Device names ending with \"...\" are truncated by the MME (Multimedia\n");
+        printf("      Extensions) API, which has a 32-character limit. The same device may\n");
+        printf("      appear with its full name under other APIs (DirectSound, WASAPI, WDM-KS).\n");
+    }
 
     Pa_Terminate();
     return 0;
@@ -254,8 +337,8 @@ static int show_device_info(int device_index)
     const int num_formats = sizeof(test_formats) / sizeof(test_formats[0]);
 
 #ifdef _WIN32
-    /* Set console output to ANSI code page to handle UTF characters */
-    SetConsoleOutputCP(CP_ACP);
+    /* Set console output to UTF-8 to handle Unicode characters */
+    SetConsoleOutputCP(CP_UTF8);
 #endif
 
     err = Pa_Initialize();
@@ -285,9 +368,19 @@ static int show_device_info(int device_index)
     }
 
     /* Display basic device information */
-    printf("Device %d: %s\n", device_index, device_info->name);
+    printf("Device %d: %s", device_index, device_info->name);
+    if (is_name_truncated(device_info->name)) {
+        printf("...");
+    }
+    printf("\n");
     printf("================================================================================\n");
     printf("Host API:                %s\n", host_info->name);
+
+    /* Add note if name is truncated by MME */
+    if (is_name_truncated(device_info->name) && strcmp(host_info->name, "MME") == 0) {
+        printf("\nNOTE: Device name truncated by MME API (32 character limit).\n");
+        printf("      Full name may be visible under other APIs (DirectSound, WASAPI, WDM-KS).\n\n");
+    }
     printf("Max input channels:      %d", device_info->maxInputChannels);
     if (is_default_input) {
         printf(" (DEFAULT INPUT)");
