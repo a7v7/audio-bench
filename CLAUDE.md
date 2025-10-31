@@ -23,11 +23,13 @@ audio-bench can be used in two distinct ways:
 
 ## Project Status
 
-**Note**: Several new C programs have been created but may not yet be fully integrated into the build system or Python orchestration layer. Current source files include:
-- `ab_audio_analyze.c` - Basic analysis (likely working with current Makefile)
-- `ab_acq.c` - Audio acquisition (requires PortAudio/libpopt - may need custom build)
-- `ab_freq_response.c` - Frequency response (check build requirements)
-- `ab_wav_fft.c` - FFT analysis (requires FFTW3)
+**Note**: All C programs successfully build with the current Makefile. Python orchestration layer (`generate_report.py`) is partially implemented. Current source files include:
+- `ab_audio_analyze.c` - Basic peak/RMS analysis
+- `ab_acq.c` - Audio acquisition/recording from sound card
+- `ab_freq_response.c` - Frequency response analysis
+- `ab_wav_fft.c` - FFT-based frequency domain analysis
+- `ab_wave_list.c` - Lists WAV files in directory with properties
+- `ab_list_dev.c` - Lists audio devices (input/output) with filtering options
 
 **Python Scripts**:
 - `ab_project_create.py` - Creates organized project directory structures (✓ implemented)
@@ -40,12 +42,13 @@ audio-bench can be used in two distinct ways:
 ```bash
 make              # Build all programs
 make clean        # Remove build artifacts
-make install      # Install binaries to /usr/local/bin (requires sudo)
-make uninstall    # Remove installed binaries
+make install      # Install to /c/msys64/opt/audio-bench (Windows/MSYS2)
+                  # Copies binaries, gnuplot scripts, and Python scripts
+make uninstall    # Remove installed files
 make help         # Show available make targets
 ```
 
-**Compiler flags:** The Makefile uses `-Wall -O2 -std=c11` with linking to `-lm -lsndfile -lfftw3`. Additional libraries may be needed for specific programs (e.g., `-lportaudio -lpopt` for ab_acq).
+**Compiler flags:** The Makefile uses `-Wall -O2 -std=c11` with linking to `-lm -lsndfile -lfftw3 -lpopt -lportaudio`. All required libraries are linked by default.
 
 ## Key Dependencies
 
@@ -62,6 +65,7 @@ On Windows/MSYS2 environment (current platform), ensure MINGW64 packages are ins
 ```bash
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-libsndfile mingw-w64-x86_64-fftw
 pacman -S mingw-w64-x86_64-portaudio mingw-w64-x86_64-popt
+pacman -S mingw-w64-x86_64-gnuplot mingw-w64-x86_64-python mingw-w64-x86_64-python-pip
 ```
 See docs/INSTALL.md for complete dependency installation instructions for all platforms.
 
@@ -74,10 +78,12 @@ See docs/INSTALL.md for complete dependency installation instructions for all pl
    - Perform real-time analysis (peak detection, RMS calculation, FFT)
    - Output results in parseable text format
    - Available programs (all prefixed with `ab_`):
-     - `ab_audio_analyze.c` - Basic peak/RMS analysis with AudioStats structure
-     - `ab_acq.c` - Audio acquisition/recording from sound card devices
-     - `ab_freq_response.c` - Frequency response analysis
-     - `ab_wav_fft.c` - FFT-based frequency domain analysis
+     - `ab_audio_analyze` - Basic peak/RMS analysis with AudioStats structure
+     - `ab_acq` - Audio acquisition/recording from sound card devices
+     - `ab_freq_response` - Frequency response analysis
+     - `ab_wav_fft` - FFT-based frequency domain analysis with interval snapshot support
+     - `ab_wave_list` - Lists WAV files in directory with their properties
+     - `ab_list_dev` - Lists audio devices with input/output filtering
 
 2. **Python Orchestration** (scripts/): High-level workflow coordination
    - `generate_report.py`: Main entry point for report generation
@@ -141,17 +147,36 @@ python scripts/generate_report.py --input test.wav --output report/ --skip-analy
 ./bin/ab_audio_analyze input.wav
 
 # With options
-./bin/ab_audio_analyze input.wav -o output.txt -v
+./bin/ab_audio_analyze input.wav -o output.txt -V
 
 # Run frequency response analysis
 ./bin/ab_freq_response input.wav
 
-# Run FFT analysis
+# Run FFT analysis (single snapshot)
 ./bin/ab_wav_fft input.wav
 
-# Record audio from sound card (list devices first)
-./bin/ab_acq --list-devices
-./bin/ab_acq --device 0 --output recording.wav --duration 5
+# Run FFT analysis with interval snapshots (every 100ms)
+./bin/ab_wav_fft -i input.wav -o output_prefix -t 100
+# Creates files: output_prefix_0000ms.csv, output_prefix_0100ms.csv, etc.
+
+# List all WAV files in current directory
+./bin/ab_wave_list
+
+# List all audio devices (input and output)
+./bin/ab_list_dev
+
+# List only input devices
+./bin/ab_list_dev --input
+
+# List only output devices
+./bin/ab_list_dev --output
+
+# Show detailed info for specific device
+./bin/ab_list_dev --info 0
+
+# Record audio from sound card (use ab_list_dev to find device index)
+./bin/ab_acq -d 0 -o recording.wav -t 5
+./bin/ab_acq -d 0 -o test.wav -r 48000 -c 2 -b 24
 ```
 
 ### Creating Graphs
@@ -206,10 +231,10 @@ When implementing a new audio metric analyzer:
    - Add appropriate struct for results
    - Include proper command-line argument parsing (consider libpopt for complex options)
 
-2. **Update Makefile**:
+2. **Update Makefile** (if needed):
    - New source files are auto-detected by `$(wildcard $(SRC_DIR)/*.c)`
-   - Ensure linking includes necessary libraries
-   - Note: Current Makefile may need modification if your program requires additional libraries beyond the default `-lm -lsndfile -lfftw3`
+   - Current LDFLAGS include: `-lm -lsndfile -lfftw3 -lpopt -lportaudio`
+   - If your program needs additional libraries, update the LDFLAGS line in the Makefile
 
 3. **Create Python integration**:
    - Add subprocess calls in `generate_report.py`
@@ -241,7 +266,10 @@ When implementing a new audio metric analyzer:
 - The project is designed for cross-platform use (Linux, macOS, Windows/MSYS2)
 - All audio I/O must go through libsndfile for format compatibility
 - **Binary naming convention**: All C programs use the `ab_` prefix (e.g., ab_audio_analyze, ab_acq)
-- **Makefile limitation**: Current Makefile links all programs with the same libraries (`-lm -lsndfile -lfftw3`). Programs requiring additional libraries (like ab_acq which needs `-lportaudio -lpopt`) may need custom Makefile rules or manual compilation
+- **On Windows/MSYS2**: Binaries have `.exe` extension (e.g., `ab_audio_analyze.exe`)
+- All programs link with the same libraries: `-lm -lsndfile -lfftw3 -lpopt -lportaudio`
+- **Device enumeration**: Use `ab_list_dev` for listing audio devices; `ab_acq` is dedicated to recording only
 - Gnuplot scripts expect specific data file formats - maintain consistency
 - Python scripts check for tool dependencies before execution
 - C programs should handle mono and stereo audio files appropriately (see AudioStats structure in ab_audio_analyze.c)
+- Install location varies by platform: Linux/macOS use `/usr/local/bin`, Windows/MSYS2 uses `/c/msys64/opt/audio-bench`

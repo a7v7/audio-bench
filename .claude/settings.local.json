@@ -17,7 +17,17 @@
       "Bash(./bin/ab_freq_response.exe:*)",
       "Bash(./bin/ab_wav_fft.exe:*)",
       "Bash(./bin/ab_wave_list.exe:*)",
-      "Read(//c/**)"
+      "Read(//c/**)",
+      "Bash(./bin/ab_list_dev.exe:*)",
+      "Bash(/usr/bin/make:*)",
+      "Bash(/c/msys64/usr/bin/make --version)",
+      "Bash(mount:*)",
+      "Bash(csound:*)",
+      "Bash(export TMPDIR=/tmp)",
+      "Bash(export TMP=~/tmp TEMP=~/tmp TMPDIR=~/tmp)",
+      "Bash(export TMP=/c/msys64/tmp TEMP=/c/msys64/tmp TMPDIR=/c/msys64/tmp:*)",
+      "Bash(TMP=/c/msys64/tmp TEMP=/c/msys64/tmp TMPDIR=/c/msys64/tmp gcc:*)",
+      "Bash(TMP=/c/msys64/tmp TEMP=/c/msys64/tmp TMPDIR=/c/msys64/tmp make:*)"
     ],
     "deny": [],
     "ask": []

@@ -31,6 +31,11 @@ CC = gcc
 CFLAGS = -Wall -O2 -std=c11
 LDFLAGS = -lm -lsndfile -lfftw3 -lpopt -lportaudio
 
+# Export temp directory to avoid Windows permission issues
+export TMP=/c/msys64/tmp
+export TEMP=/c/msys64/tmp
+export TMPDIR=/c/msys64/tmp
+
 # Directories
 SRC_DIR = src
 BIN_DIR = bin
