@@ -27,8 +27,8 @@ audio-bench can be used in two distinct ways:
 - `ab_audio_analyze.c` - Basic peak/RMS analysis
 - `ab_acq.c` - Audio acquisition/recording from sound card
 - `ab_freq_response.c` - Frequency response analysis
-- `ab_wav_fft.c` - FFT-based frequency domain analysis
-- `ab_wave_list.c` - Lists WAV files in directory with properties
+- `ab_wav_fft.c` - FFT-based frequency domain analysis with interval snapshot support
+- `ab_list_wav.c` - Lists WAV files in directory with properties
 - `ab_list_dev.c` - Lists audio devices (input/output) with filtering options
 
 **Python Scripts**:
@@ -82,7 +82,7 @@ See docs/INSTALL.md for complete dependency installation instructions for all pl
      - `ab_acq` - Audio acquisition/recording from sound card devices
      - `ab_freq_response` - Frequency response analysis
      - `ab_wav_fft` - FFT-based frequency domain analysis with interval snapshot support
-     - `ab_wave_list` - Lists WAV files in directory with their properties
+     - `ab_list_wav` - Lists WAV files in directory with their properties
      - `ab_list_dev` - Lists audio devices with input/output filtering
 
 2. **Python Orchestration** (scripts/): High-level workflow coordination
@@ -160,7 +160,7 @@ python scripts/generate_report.py --input test.wav --output report/ --skip-analy
 # Creates files: output_prefix_0000ms.csv, output_prefix_0100ms.csv, etc.
 
 # List all WAV files in current directory
-./bin/ab_wave_list
+./bin/ab_list_wav
 
 # List all audio devices (input and output)
 ./bin/ab_list_dev

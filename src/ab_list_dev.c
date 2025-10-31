@@ -40,6 +40,10 @@
 #include <portaudio.h>
 #include <popt.h>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 /* Device filter modes */
 typedef enum {
     FILTER_ALL,      /* Show all devices */
@@ -60,6 +64,13 @@ static int list_devices(DeviceFilter filter)
     const PaDeviceInfo *device_info;
     const PaHostApiInfo *host_info;
     int device_count = 0;
+    size_t max_name_len = 11;  // Minimum: "Device Name"
+    size_t max_host_len = 8;   // Minimum: "Host API"
+
+#ifdef _WIN32
+    /* Set console output to ANSI code page to handle UTF characters */
+    SetConsoleOutputCP(CP_ACP);
+#endif
 
     err = Pa_Initialize();
     if (err != paNoError) {
@@ -81,6 +92,39 @@ static int list_devices(DeviceFilter filter)
         return 0;
     }
 
+    /* First pass: determine maximum column widths */
+    for (int i = 0; i < num_devices; i++) {
+        device_info = Pa_GetDeviceInfo(i);
+        host_info = Pa_GetHostApiInfo(device_info->hostApi);
+
+        /* Check if device matches filter */
+        int show_device = 0;
+        switch (filter) {
+            case FILTER_INPUT:
+                show_device = (device_info->maxInputChannels > 0);
+                break;
+            case FILTER_OUTPUT:
+                show_device = (device_info->maxOutputChannels > 0);
+                break;
+            case FILTER_ALL:
+            default:
+                show_device = 1;
+                break;
+        }
+
+        if (show_device) {
+            size_t name_len = strlen(device_info->name);
+            size_t host_len = strlen(host_info->name);
+
+            if (name_len > max_name_len) {
+                max_name_len = name_len;
+            }
+            if (host_len > max_host_len) {
+                max_host_len = host_len;
+            }
+        }
+    }
+
     /* Print header based on filter mode */
     switch (filter) {
         case FILTER_INPUT:
@@ -95,10 +139,20 @@ static int list_devices(DeviceFilter filter)
             break;
     }
 
-    printf("%-4s %-40s %-15s %-8s %-8s %s\n",
-           "ID", "Device Name", "Host API", "In Ch", "Out Ch", "Default Rate");
-    printf("--------------------------------------------------------------------------------\n");
+    /* Print table header with dynamic widths */
+    printf("%-4s %-*s %-*s %-8s %-8s %s\n",
+           "ID", (int)max_name_len, "Device Name",
+           (int)max_host_len, "Host API",
+           "In Ch", "Out Ch", "Default Rate");
 
+    /* Print separator line */
+    int total_width = 4 + 1 + max_name_len + 1 + max_host_len + 1 + 8 + 1 + 8 + 1 + 12;
+    for (int i = 0; i < total_width; i++) {
+        printf("-");
+    }
+    printf("\n");
+
+    /* Second pass: print device information */
     for (int i = 0; i < num_devices; i++) {
         device_info = Pa_GetDeviceInfo(i);
         host_info = Pa_GetHostApiInfo(device_info->hostApi);
@@ -137,10 +191,10 @@ static int list_devices(DeviceFilter filter)
                 snprintf(out_ch_str, sizeof(out_ch_str), "-");
             }
 
-            printf("%-4d %-40s %-15s %-8s %-8s %.0f Hz\n",
+            printf("%-4d %-*s %-*s %-8s %-8s %.0f Hz\n",
                    i,
-                   device_info->name,
-                   host_info->name,
+                   (int)max_name_len, device_info->name,
+                   (int)max_host_len, host_info->name,
                    in_ch_str,
                    out_ch_str,
                    device_info->defaultSampleRate);
@@ -149,7 +203,11 @@ static int list_devices(DeviceFilter filter)
         }
     }
 
-    printf("--------------------------------------------------------------------------------\n");
+    /* Print separator line */
+    for (int i = 0; i < total_width; i++) {
+        printf("-");
+    }
+    printf("\n");
     printf("Total devices found: %d\n", device_count);
 
     Pa_Terminate();
@@ -167,9 +225,38 @@ static int show_device_info(int device_index)
     PaError err;
     const PaDeviceInfo *device_info;
     const PaHostApiInfo *host_info;
+    PaStreamParameters input_params, output_params;
     int num_devices;
     int is_default_input = 0;
     int is_default_output = 0;
+
+    /* Standard sample rates to test */
+    const int test_sample_rates[] = {
+        8000, 11025, 16000, 22050, 32000, 44100, 48000,
+        88200, 96000, 176400, 192000
+    };
+    const int num_sample_rates = sizeof(test_sample_rates) / sizeof(test_sample_rates[0]);
+
+    /* Sample formats to test */
+    typedef struct {
+        PaSampleFormat format;
+        const char *name;
+        int bit_depth;
+    } FormatInfo;
+
+    const FormatInfo test_formats[] = {
+        {paInt8, "8-bit PCM", 8},
+        {paInt16, "16-bit PCM", 16},
+        {paInt24, "24-bit PCM", 24},
+        {paInt32, "32-bit PCM", 32},
+        {paFloat32, "32-bit Float", 32}
+    };
+    const int num_formats = sizeof(test_formats) / sizeof(test_formats[0]);
+
+#ifdef _WIN32
+    /* Set console output to ANSI code page to handle UTF characters */
+    SetConsoleOutputCP(CP_ACP);
+#endif
 
     err = Pa_Initialize();
     if (err != paNoError) {
@@ -197,7 +284,7 @@ static int show_device_info(int device_index)
         is_default_output = 1;
     }
 
-    /* Display device information */
+    /* Display basic device information */
     printf("Device %d: %s\n", device_index, device_info->name);
     printf("================================================================================\n");
     printf("Host API:                %s\n", host_info->name);
@@ -228,6 +315,108 @@ static int show_device_info(int device_index)
     }
 
     printf("\n");
+
+    /* Test supported sample rates for INPUT devices */
+    if (device_info->maxInputChannels > 0) {
+        printf("Supported Input Sample Rates:\n");
+        printf("--------------------------------------------------------------------------------\n");
+
+        memset(&input_params, 0, sizeof(input_params));
+        input_params.device = device_index;
+        input_params.channelCount = device_info->maxInputChannels > 1 ? 2 : 1;
+        input_params.sampleFormat = paInt16;
+        input_params.suggestedLatency = device_info->defaultLowInputLatency;
+        input_params.hostApiSpecificStreamInfo = NULL;
+
+        for (int i = 0; i < num_sample_rates; i++) {
+            err = Pa_IsFormatSupported(&input_params, NULL, test_sample_rates[i]);
+            if (err == paFormatIsSupported) {
+                printf("  %6d Hz  [OK]\n", test_sample_rates[i]);
+            }
+        }
+        printf("\n");
+
+        /* Test supported formats at default sample rate */
+        printf("Supported Input Formats (at %.0f Hz, %d ch):\n",
+               device_info->defaultSampleRate,
+               input_params.channelCount);
+        printf("--------------------------------------------------------------------------------\n");
+
+        for (int i = 0; i < num_formats; i++) {
+            input_params.sampleFormat = test_formats[i].format;
+            err = Pa_IsFormatSupported(&input_params, NULL, device_info->defaultSampleRate);
+            if (err == paFormatIsSupported) {
+                printf("  %-20s [OK]\n", test_formats[i].name);
+            }
+        }
+        printf("\n");
+
+        /* Test channel configurations */
+        printf("Supported Input Channel Configurations (at %.0f Hz, 16-bit):\n",
+               device_info->defaultSampleRate);
+        printf("--------------------------------------------------------------------------------\n");
+
+        input_params.sampleFormat = paInt16;
+        for (int ch = 1; ch <= device_info->maxInputChannels && ch <= 8; ch++) {
+            input_params.channelCount = ch;
+            err = Pa_IsFormatSupported(&input_params, NULL, device_info->defaultSampleRate);
+            if (err == paFormatIsSupported) {
+                printf("  %d channel%s  [OK]\n", ch, ch > 1 ? "s" : "");
+            }
+        }
+        printf("\n");
+    }
+
+    /* Test supported sample rates for OUTPUT devices */
+    if (device_info->maxOutputChannels > 0) {
+        printf("Supported Output Sample Rates:\n");
+        printf("--------------------------------------------------------------------------------\n");
+
+        memset(&output_params, 0, sizeof(output_params));
+        output_params.device = device_index;
+        output_params.channelCount = device_info->maxOutputChannels > 1 ? 2 : 1;
+        output_params.sampleFormat = paInt16;
+        output_params.suggestedLatency = device_info->defaultLowOutputLatency;
+        output_params.hostApiSpecificStreamInfo = NULL;
+
+        for (int i = 0; i < num_sample_rates; i++) {
+            err = Pa_IsFormatSupported(NULL, &output_params, test_sample_rates[i]);
+            if (err == paFormatIsSupported) {
+                printf("  %6d Hz  [OK]\n", test_sample_rates[i]);
+            }
+        }
+        printf("\n");
+
+        /* Test supported formats at default sample rate */
+        printf("Supported Output Formats (at %.0f Hz, %d ch):\n",
+               device_info->defaultSampleRate,
+               output_params.channelCount);
+        printf("--------------------------------------------------------------------------------\n");
+
+        for (int i = 0; i < num_formats; i++) {
+            output_params.sampleFormat = test_formats[i].format;
+            err = Pa_IsFormatSupported(NULL, &output_params, device_info->defaultSampleRate);
+            if (err == paFormatIsSupported) {
+                printf("  %-20s [OK]\n", test_formats[i].name);
+            }
+        }
+        printf("\n");
+
+        /* Test channel configurations */
+        printf("Supported Output Channel Configurations (at %.0f Hz, 16-bit):\n",
+               device_info->defaultSampleRate);
+        printf("--------------------------------------------------------------------------------\n");
+
+        output_params.sampleFormat = paInt16;
+        for (int ch = 1; ch <= device_info->maxOutputChannels && ch <= 8; ch++) {
+            output_params.channelCount = ch;
+            err = Pa_IsFormatSupported(NULL, &output_params, device_info->defaultSampleRate);
+            if (err == paFormatIsSupported) {
+                printf("  %d channel%s  [OK]\n", ch, ch > 1 ? "s" : "");
+            }
+        }
+        printf("\n");
+    }
 
     Pa_Terminate();
     return 0;

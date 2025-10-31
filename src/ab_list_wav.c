@@ -23,7 +23,7 @@
 //------------------------------------------------------------------------------
 
 /*
- * ab_wave_list.c - List all WAV files in current directory with their properties
+ * ab_list_wav.c - List all WAV files in current directory with their properties
  *
  * Features:
  * - Scans current directory for WAV files
@@ -197,7 +197,7 @@ int main(int argc, const char **argv)
 
     /* Handle version mode */
     if (version_flag) {
-        printf("ab_wave_list version 1.0.0\n");
+        printf("ab_list_wav version 1.0.0\n");
         printf("WAV file listing tool for audio-bench\n");
         printf("Copyright (c) 2025 Anthony Verbeck\n");
         poptFreeContext(popt_ctx);
