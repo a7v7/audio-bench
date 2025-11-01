@@ -77,6 +77,44 @@ static size_t utf8_display_width(const char *str)
 }
 
 /*
+ * Remove empty parentheses from device name
+ *
+ * @param dest: Destination buffer
+ * @param src: Source string
+ * @param dest_size: Size of destination buffer
+ */
+static void remove_empty_parens(char *dest, const char *src, size_t dest_size)
+{
+    if (!src || !dest || dest_size == 0) return;
+
+    const char *read = src;
+    char *write = dest;
+    size_t remaining = dest_size - 1; /* Reserve space for null terminator */
+
+    while (*read && remaining > 0) {
+        /* Check for empty parentheses: "() " or "()" at end */
+        if (read[0] == '(' && read[1] == ')') {
+            /* Skip the empty parens */
+            read += 2;
+            /* Also skip trailing space after empty parens if present */
+            if (*read == ' ') {
+                read++;
+            }
+        } else {
+            *write++ = *read++;
+            remaining--;
+        }
+    }
+
+    /* Remove trailing spaces */
+    while (write > dest && *(write - 1) == ' ') {
+        write--;
+    }
+
+    *write = '\0';
+}
+
+/*
  * Check if a device name appears truncated
  *
  * @param name: Device name to check
@@ -171,11 +209,15 @@ static int list_devices(DeviceFilter filter)
         }
 
         if (show_device) {
-            size_t name_len = strlen(device_info->name);
-            size_t host_len = strlen(host_info->name);
+            /* Clean device name (remove empty parentheses) */
+            char clean_name[256];
+            remove_empty_parens(clean_name, device_info->name, sizeof(clean_name));
+
+            size_t name_len = utf8_display_width(clean_name);
+            size_t host_len = utf8_display_width(host_info->name);
 
             /* Add 3 chars for "..." if name appears truncated */
-            if (is_name_truncated(device_info->name)) {
+            if (is_name_truncated(clean_name)) {
                 name_len += 3;
             }
 
@@ -254,23 +296,36 @@ static int list_devices(DeviceFilter filter)
                 snprintf(out_ch_str, sizeof(out_ch_str), "-");
             }
 
+            /* Clean device name (remove empty parentheses) */
+            char clean_name[256];
+            remove_empty_parens(clean_name, device_info->name, sizeof(clean_name));
+
             /* Check for truncation and format device name accordingly */
             char formatted_name[256];
-            if (is_name_truncated(device_info->name)) {
-                snprintf(formatted_name, sizeof(formatted_name), "%s...", device_info->name);
+            if (is_name_truncated(clean_name)) {
+                snprintf(formatted_name, sizeof(formatted_name), "%s...", clean_name);
 
                 /* Track if this is MME truncation */
                 if (strcmp(host_info->name, "MME") == 0) {
                     mme_truncation_detected = 1;
                 }
             } else {
-                snprintf(formatted_name, sizeof(formatted_name), "%s", device_info->name);
+                snprintf(formatted_name, sizeof(formatted_name), "%s", clean_name);
             }
+
+            /* Calculate byte overhead for UTF-8 padding adjustment */
+            size_t name_byte_len = strlen(formatted_name);
+            size_t name_display_len = utf8_display_width(formatted_name);
+            size_t name_byte_overhead = name_byte_len - name_display_len;
+
+            size_t host_byte_len = strlen(host_info->name);
+            size_t host_display_len = utf8_display_width(host_info->name);
+            size_t host_byte_overhead = host_byte_len - host_display_len;
 
             printf("%-4d %-*s %-*s %-8s %-8s %.0f Hz\n",
                    i,
-                   (int)max_name_len, formatted_name,
-                   (int)max_host_len, host_info->name,
+                   (int)(max_name_len + name_byte_overhead), formatted_name,
+                   (int)(max_host_len + host_byte_overhead), host_info->name,
                    in_ch_str,
                    out_ch_str,
                    device_info->defaultSampleRate);
@@ -367,9 +422,13 @@ static int show_device_info(int device_index)
         is_default_output = 1;
     }
 
+    /* Clean device name (remove empty parentheses) */
+    char clean_name[256];
+    remove_empty_parens(clean_name, device_info->name, sizeof(clean_name));
+
     /* Display basic device information */
-    printf("Device %d: %s", device_index, device_info->name);
-    if (is_name_truncated(device_info->name)) {
+    printf("Device %d: %s", device_index, clean_name);
+    if (is_name_truncated(clean_name)) {
         printf("...");
     }
     printf("\n");
@@ -377,7 +436,7 @@ static int show_device_info(int device_index)
     printf("Host API:                %s\n", host_info->name);
 
     /* Add note if name is truncated by MME */
-    if (is_name_truncated(device_info->name) && strcmp(host_info->name, "MME") == 0) {
+    if (is_name_truncated(clean_name) && strcmp(host_info->name, "MME") == 0) {
         printf("\nNOTE: Device name truncated by MME API (32 character limit).\n");
         printf("      Full name may be visible under other APIs (DirectSound, WASAPI, WDM-KS).\n\n");
     }
