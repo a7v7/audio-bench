@@ -160,12 +160,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Check for incompatible options
-    if (interval_ms > 0 && avg_count > 1) {
-        fprintf(stderr, "Warning: --average option is ignored in interval mode\n");
-        avg_count = 1;
-    }
-
     poptFreeContext(opt_context);
 
     // Open the audio file
@@ -341,8 +335,8 @@ int main(int argc, char *argv[])
         // Calculate hop size (50% overlap) for averaging
         int hop_size = fft_size / 2;
 
-        // Perform sliding window FFT averaging (only for single mode with avg_count > 1)
-        int windows_to_average = (interval_ms > 0) ? 1 : avg_count;
+        // Perform sliding window FFT averaging
+        int windows_to_average = avg_count;
 
         for (int window = 0; window < windows_to_average; window++) {
             // Seek to the start position for this window

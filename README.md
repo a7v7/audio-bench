@@ -23,24 +23,34 @@ audio-bench/
 ## Features
 
 - WAV file analysis and processing
-- Multiple audio metrics measurement:
-  - Frequency response
-  - Total Harmonic Distortion (THD)
-  - Signal-to-Noise Ratio (SNR)
-  - Dynamic range
-  - Phase response
-  - Latency measurement
+- Audio device enumeration and recording
+- FFT-based frequency domain analysis with interval snapshots
+- Frequency response analysis
+- Basic audio statistics (peak, RMS levels)
 - Automated report generation with graphs
 - Flexible usage for both device testing and file analysis
+
+### Available Tools
+
+All tools use the `ab_` prefix:
+- `ab_audio_analyze` - Basic peak/RMS analysis
+- `ab_acq` - Audio acquisition/recording from sound card
+- `ab_freq_response` - Frequency response analysis
+- `ab_wav_fft` - FFT analysis with optional interval snapshots and averaging
+- `ab_list_wav` - List WAV files in directory with properties
+- `ab_list_dev` - List audio input/output devices
 
 ## Dependencies
 
 ### C Programs
 - libsndfile (for WAV file handling)
 - FFTW3 (for FFT operations)
+- PortAudio (for audio device I/O)
+- libpopt (for command-line option parsing)
 - Standard C library (math.h, etc.)
 
 ### Python Scripts
+- Python 3
 - NumPy
 - SciPy
 - matplotlib (optional, for additional plotting)
@@ -60,7 +70,35 @@ This will compile all C programs and place binaries in the `bin/` directory.
 
 ### Analyzing a WAV file
 ```bash
-./bin/audio-analyze input.wav
+# Basic audio analysis (peak, RMS)
+./bin/ab_audio_analyze input.wav
+
+# FFT analysis
+./bin/ab_wav_fft -i input.wav -o output.csv
+
+# FFT with interval snapshots (every 100ms)
+./bin/ab_wav_fft -i input.wav -o output -t 100
+
+# FFT with averaging (4 overlapping windows)
+./bin/ab_wav_fft -i input.wav -o output.csv -a 4
+
+# Frequency response analysis
+./bin/ab_freq_response input.wav
+```
+
+### Audio device operations
+```bash
+# List all audio devices
+./bin/ab_list_dev
+
+# List only input devices
+./bin/ab_list_dev --input
+
+# Record audio (5 seconds from device 0)
+./bin/ab_acq -d 0 -o recording.wav -t 5
+
+# Record with specific settings (48kHz, stereo, 24-bit)
+./bin/ab_acq -d 0 -o recording.wav -r 48000 -c 2 -b 24
 ```
 
 ### Generating a full report
@@ -83,8 +121,10 @@ Contributions are welcome! Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.m
 
 ## License
 
-[License information to be added]
+MIT License - see source files for full license text
+
+Copyright (c) 2025 Anthony Verbeck
 
 ## Authors
 
-[Author information to be added]
+Anthony Verbeck
