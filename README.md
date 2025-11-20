@@ -37,6 +37,8 @@ All tools use the `ab_` prefix:
 - `ab_acq` - Audio acquisition/recording from sound card
 - `ab_freq_response` - Frequency response analysis
 - `ab_wav_fft` - FFT analysis with optional interval snapshots and averaging
+- `ab_gain_calc` - Gain calculator for comparing two 1kHz wave files
+- `ab_thd_calc` - Total Harmonic Distortion (THD) calculator for sine waves
 - `ab_list_wav` - List WAV files in directory with properties
 - `ab_list_dev` - List audio input/output devices
 
@@ -84,6 +86,18 @@ This will compile all C programs and place binaries in the `bin/` directory.
 
 # Frequency response analysis
 ./bin/ab_freq_response input.wav
+
+# Gain calculation (compare two 1kHz signals)
+./bin/ab_gain_calc reference.wav measured.wav
+
+# THD calculation (1kHz sine wave, default)
+./bin/ab_thd_calc -f test_1khz.wav
+
+# THD for different frequencies
+./bin/ab_thd_calc -f test_10khz.wav -F 10000
+
+# THD with custom FFT size and harmonic count
+./bin/ab_thd_calc -f test_1khz.wav -s 16384 -n 15
 ```
 
 ### Audio device operations
@@ -113,7 +127,53 @@ gnuplot gnuplot/frequency_response.gp
 
 ## Installation
 
-See [docs/INSTALL.md](docs/INSTALL.md) for detailed installation instructions.
+### Quick Install
+
+```bash
+make
+make install
+```
+
+This will:
+- Compile all C programs
+- Install binaries to `/opt/audio-bench/bin`
+- Install Python scripts to `/opt/audio-bench/scripts`
+- Install gnuplot scripts to `/opt/audio-bench/gnuplot`
+
+### Installation Paths
+
+After installation, the following directory structure is created:
+
+```
+/opt/audio-bench/
+├── bin/              # Compiled C programs (ab_*)
+├── scripts/          # Python scripts
+└── gnuplot/          # Gnuplot visualization templates
+```
+
+### Environment Setup
+
+Add the following to your shell configuration file (`.bashrc`, `.zshrc`, etc.):
+
+```bash
+export AUDIO_BENCH=/opt/audio-bench
+export PATH=$AUDIO_BENCH/bin:$PATH
+```
+
+This allows you to run audio-bench tools from any directory without specifying the full path.
+
+### Platform-Specific Notes
+
+- **Linux/macOS**: Default installation path is `/opt/audio-bench`
+- **Windows/MSYS2**: Installation path is `/c/msys64/opt/audio-bench`
+
+For detailed dependency installation instructions, see [docs/INSTALL.md](docs/INSTALL.md).
+
+### Uninstall
+
+```bash
+make uninstall
+```
 
 ## Contributing
 

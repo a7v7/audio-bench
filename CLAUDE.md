@@ -28,6 +28,8 @@ audio-bench can be used in two distinct ways:
 - `ab_acq.c` - Audio acquisition/recording from sound card
 - `ab_freq_response.c` - Frequency response analysis
 - `ab_wav_fft.c` - FFT-based frequency domain analysis with interval snapshot support
+- `ab_gain_calc.c` - Gain calculator for comparing two 1kHz wave files
+- `ab_thd_calc.c` - Total Harmonic Distortion (THD) calculator for sine waves
 - `ab_list_wav.c` - Lists WAV files in directory with properties
 - `ab_list_dev.c` - Lists audio devices (input/output) with filtering options
 
@@ -82,6 +84,8 @@ See docs/INSTALL.md for complete dependency installation instructions for all pl
      - `ab_acq` - Audio acquisition/recording from sound card devices
      - `ab_freq_response` - Frequency response analysis
      - `ab_wav_fft` - FFT-based frequency domain analysis with interval snapshot support
+     - `ab_gain_calc` - Gain calculator for comparing two 1kHz wave files
+     - `ab_thd_calc` - Total Harmonic Distortion (THD) calculator for sine waves
      - `ab_list_wav` - Lists WAV files in directory with their properties
      - `ab_list_dev` - Lists audio devices with input/output filtering
 
@@ -177,6 +181,11 @@ python scripts/generate_report.py --input test.wav --output report/ --skip-analy
 # Record audio from sound card (use ab_list_dev to find device index)
 ./bin/ab_acq -d 0 -o recording.wav -t 5
 ./bin/ab_acq -d 0 -o test.wav -r 48000 -c 2 -b 24
+
+# Calculate THD for a sine wave
+./bin/ab_thd_calc -f test_1khz.wav                    # 1kHz (default)
+./bin/ab_thd_calc -f test_10khz.wav -F 10000          # 10kHz
+./bin/ab_thd_calc -f test_1khz.wav -s 16384 -n 15     # Custom FFT size and harmonics
 ```
 
 ### Creating Graphs

@@ -301,7 +301,7 @@ static int list_devices(DeviceFilter filter)
             remove_empty_parens(clean_name, device_info->name, sizeof(clean_name));
 
             /* Check for truncation and format device name accordingly */
-            char formatted_name[256];
+            char formatted_name[260];
             if (is_name_truncated(clean_name)) {
                 snprintf(formatted_name, sizeof(formatted_name), "%s...", clean_name);
 
