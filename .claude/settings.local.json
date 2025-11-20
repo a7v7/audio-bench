@@ -3,7 +3,12 @@
     "allow": [
       "Bash(make:*)",
       "Bash(./bin/ab_list_dev:*)",
-      "Bash(/c/msys64/opt/audio-bench/bin/ab_list_dev:*)"
+      "Bash(/c/msys64/opt/audio-bench/bin/ab_list_dev:*)",
+      "Bash(./bin/ab_gain_calc:*)",
+      "Bash(./bin/ab_gain_calc.exe:*)",
+      "Bash(./ab_gain_calc.exe:*)",
+      "Bash(./bin/ab_audio_analyze.exe:*)",
+      "Bash(sox:*)"
     ],
     "deny": [],
     "ask": []
