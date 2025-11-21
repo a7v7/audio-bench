@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(g++:*)",
+      "Bash(../bin/ab_acq_asio.exe:*)",
+      "Bash(export TEMP=/tmp)",
+      "Bash(export TMP=/tmp)",
+      "Bash(ldd C:/dev/audio-bench/bin/ab_acq_asio.exe)",
+      "Bash(./ab_acq_asio.exe:*)",
+      "Bash(echo:*)",
+      "Bash(export PATH=\"/c/msys64/ucrt64/bin:$PATH\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

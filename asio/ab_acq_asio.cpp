@@ -10,8 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "asio.h"
+#include <popt.h>
 #include "asiosys.h"
+#include "asio.h"
+#include "iasiodrv.h"
 #include "asiodrivers.h"
 
 // Global ASIO state
@@ -194,7 +196,7 @@ static bool initASIO(const char* driverName)
     // Initialize the driver
     ASIOError err = ASIOInit(&driverInfo);
     if (err != ASE_OK) {
-        printf("ASIOInit failed with error: %d\n", err);
+        printf("ASIOInit failed with error: %ld\n", err);
         asioDrivers->removeCurrentDriver();
         delete asioDrivers;
         return false;
@@ -260,7 +262,7 @@ static bool setupASIOBuffers(long inputChannel)
     // Create buffers
     ASIOError err = ASIOCreateBuffers(bufferInfos, 1, preferredBufferSize, &asioCallbacks);
     if (err != ASE_OK) {
-        printf("ASIOCreateBuffers failed with error: %d\n", err);
+        printf("ASIOCreateBuffers failed with error: %ld\n", err);
         return false;
     }
     
@@ -294,7 +296,13 @@ static void shutdownASIO()
 static void listASIODrivers()
 {
     AsioDrivers asioDrivers;
-    char driverNames[32][256];
+    char* driverNames[32];
+    char driverNameBuffer[32][256];
+
+    for (int i = 0; i < 32; i++) {
+        driverNames[i] = driverNameBuffer[i];
+    }
+
     long numDrivers = asioDrivers.getDriverNames(driverNames, 32);
     
     printf("Available ASIO Drivers (%ld):\n", numDrivers);
@@ -311,75 +319,82 @@ static void listASIODrivers()
 // Main Program
 //------------------------------------------------------------------------------
 
-static void printUsage(const char* progName)
-{
-    printf("ASIO Audio Acquisition Tool\n");
-    printf("Usage:\n");
-    printf("  %s -list                           List available ASIO drivers\n", progName);
-    printf("  %s -driver <name> -channels        List channels for driver\n", progName);
-    printf("  %s -driver <name> -acquire <opts>  Acquire audio samples\n", progName);
-    printf("\n");
-    printf("Acquire options:\n");
-    printf("  -channel <n>      Input channel number (default: 0)\n");
-    printf("  -samples <n>      Number of samples to acquire (default: 48000)\n");
-    printf("  -output <file>    Output file (32-bit float raw PCM, default: output.raw)\n");
-    printf("  -rate <n>         Sample rate in Hz (default: use current)\n");
-    printf("\n");
-    printf("Examples:\n");
-    printf("  %s -list\n", progName);
-    printf("  %s -driver \"ASIO4ALL v2\" -channels\n", progName);
-    printf("  %s -driver \"ASIO4ALL v2\" -acquire -channel 0 -samples 96000 -output test.raw\n", progName);
-}
-
-int main(int argc, char* argv[])
+int main(int argc, const char** argv)
 {
     CoInitialize(nullptr);
-    
-    if (argc < 2) {
-        printUsage(argv[0]);
+
+    // Command-line options
+    int listMode = 0;
+    int channelsMode = 0;
+    int acquireMode = 0;
+    char* driverName = nullptr;
+    long inputChannel = 0;
+    long samples = 48000;
+    char* outputFilename = nullptr;
+    double requestedRate = 0.0;
+
+    struct poptOption options[] = {
+        {"list", 'l', POPT_ARG_NONE, &listMode, 0,
+         "List available ASIO drivers", nullptr},
+        {"driver", 'd', POPT_ARG_STRING, &driverName, 0,
+         "ASIO driver name", "NAME"},
+        {"channels", 'C', POPT_ARG_NONE, &channelsMode, 0,
+         "List channels for specified driver", nullptr},
+        {"acquire", 'a', POPT_ARG_NONE, &acquireMode, 0,
+         "Acquire audio samples", nullptr},
+        {"channel", 'c', POPT_ARG_LONG, &inputChannel, 0,
+         "Input channel number (default: 0)", "NUM"},
+        {"samples", 's', POPT_ARG_LONG, &samples, 0,
+         "Number of samples to acquire (default: 48000)", "NUM"},
+        {"output", 'o', POPT_ARG_STRING, &outputFilename, 0,
+         "Output file (32-bit float raw PCM, default: output.raw)", "FILE"},
+        {"rate", 'r', POPT_ARG_DOUBLE, &requestedRate, 0,
+         "Sample rate in Hz (default: use current driver rate)", "HZ"},
+        POPT_AUTOHELP
+        POPT_TABLEEND
+    };
+
+    poptContext popt_ctx = poptGetContext(nullptr, argc, argv, options, 0);
+    poptSetOtherOptionHelp(popt_ctx,
+        "[OPTIONS]\n\n"
+        "ASIO Audio Acquisition Tool - Windows-only ASIO interface support\n\n"
+        "Operation Modes:\n"
+        "  --list              List all available ASIO drivers\n"
+        "  --driver <name> --channels    Show channels for specified driver\n"
+        "  --driver <name> --acquire     Acquire audio samples\n\n"
+        "Examples:\n"
+        "  ab_acq_asio --list\n"
+        "  ab_acq_asio -d \"ASIO4ALL v2\" --channels\n"
+        "  ab_acq_asio -d \"ASIO4ALL v2\" -a -c 0 -s 96000 -o test.raw -r 48000\n");
+
+    int rc = poptGetNextOpt(popt_ctx);
+    if (rc < -1) {
+        fprintf(stderr, "Error: %s: %s\n",
+                poptBadOption(popt_ctx, POPT_BADOPTION_NOALIAS),
+                poptStrerror(rc));
+        poptFreeContext(popt_ctx);
         CoUninitialize();
         return 1;
     }
-    
-    // Parse command line
-    bool listMode = false;
-    bool channelsMode = false;
-    bool acquireMode = false;
-    const char* driverName = nullptr;
-    long inputChannel = 0;
-    long samples = 48000;
-    const char* outputFilename = "output.raw";
-    double requestedRate = 0.0;
-    
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-list") == 0) {
-            listMode = true;
-        } else if (strcmp(argv[i], "-driver") == 0 && i + 1 < argc) {
-            driverName = argv[++i];
-        } else if (strcmp(argv[i], "-channels") == 0) {
-            channelsMode = true;
-        } else if (strcmp(argv[i], "-acquire") == 0) {
-            acquireMode = true;
-        } else if (strcmp(argv[i], "-channel") == 0 && i + 1 < argc) {
-            inputChannel = atol(argv[++i]);
-        } else if (strcmp(argv[i], "-samples") == 0 && i + 1 < argc) {
-            samples = atol(argv[++i]);
-        } else if (strcmp(argv[i], "-output") == 0 && i + 1 < argc) {
-            outputFilename = argv[++i];
-        } else if (strcmp(argv[i], "-rate") == 0 && i + 1 < argc) {
-            requestedRate = atof(argv[++i]);
-        }
+
+    // Set default output filename if not specified
+    if (outputFilename == nullptr && acquireMode) {
+        outputFilename = const_cast<char*>("output.raw");
     }
-    
+
     // Execute requested operation
     if (listMode) {
         listASIODrivers();
+        poptFreeContext(popt_ctx);
+        CoUninitialize();
+        return 0;
     } else if (driverName) {
         if (!initASIO(driverName)) {
+            poptFreeContext(popt_ctx);
             CoUninitialize();
             return 1;
         }
-        
+
         if (channelsMode) {
             printf("\nInput Channels:\n");
             for (long i = 0; i < numInputChannels; i++) {
@@ -390,7 +405,7 @@ int main(int argc, char* argv[])
                     printf("  %2ld: %s (Type: %ld)\n", i, channelInfo.name, channelInfo.type);
                 }
             }
-            
+
             printf("\nOutput Channels:\n");
             for (long i = 0; i < numOutputChannels; i++) {
                 ASIOChannelInfo channelInfo;
@@ -420,15 +435,17 @@ int main(int argc, char* argv[])
                 printf("Error: Invalid input channel %ld (available: 0-%ld)\n",
                        inputChannel, numInputChannels - 1);
                 shutdownASIO();
+                poptFreeContext(popt_ctx);
                 CoUninitialize();
                 return 1;
             }
-            
+
             // Open output file
             outputFile = fopen(outputFilename, "wb");
             if (!outputFile) {
                 printf("Error: Cannot open output file: %s\n", outputFilename);
                 shutdownASIO();
+                poptFreeContext(popt_ctx);
                 CoUninitialize();
                 return 1;
             }
@@ -442,19 +459,21 @@ int main(int argc, char* argv[])
             if (!setupASIOBuffers(inputChannel)) {
                 fclose(outputFile);
                 shutdownASIO();
+                poptFreeContext(popt_ctx);
                 CoUninitialize();
                 return 1;
             }
-            
+
             samplesToAcquire = samples;
             samplesAcquired = 0;
             acquisitionActive = true;
-            
+
             ASIOError err = ASIOStart();
             if (err != ASE_OK) {
-                printf("ASIOStart failed with error: %d\n", err);
+                printf("ASIOStart failed with error: %ld\n", err);
                 fclose(outputFile);
                 shutdownASIO();
+                poptFreeContext(popt_ctx);
                 CoUninitialize();
                 return 1;
             }
@@ -475,12 +494,17 @@ int main(int argc, char* argv[])
             printf("To convert to WAV: ffmpeg -f f32le -ar %.0f -ac 1 -i %s output.wav\n",
                    currentSampleRate, outputFilename);
         }
-        
+
         shutdownASIO();
     } else {
-        printUsage(argv[0]);
+        // No valid mode specified, show help
+        poptPrintHelp(popt_ctx, stderr, 0);
+        poptFreeContext(popt_ctx);
+        CoUninitialize();
+        return 1;
     }
-    
+
+    poptFreeContext(popt_ctx);
     CoUninitialize();
     return 0;
 }
