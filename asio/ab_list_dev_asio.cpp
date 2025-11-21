@@ -18,6 +18,9 @@
 // ASIO Device Probe
 //------------------------------------------------------------------------------
 
+// Global ASIODriverInfo - must be global because ASIO driver keeps a reference to it
+static ASIODriverInfo g_driverInfo;
+
 struct DeviceInfo {
     bool isAttached;
     long numInputChannels;
@@ -47,11 +50,11 @@ static bool probeASIODevice(const char* driverName, DeviceInfo* info)
     }
 
     // Attempt to initialize the driver
-    ASIODriverInfo driverInfo = {0};
-    driverInfo.asioVersion = 2;
-    driverInfo.sysRef = nullptr;
+    memset(&g_driverInfo, 0, sizeof(g_driverInfo));
+    g_driverInfo.asioVersion = 2;
+    g_driverInfo.sysRef = nullptr;
 
-    ASIOError err = ASIOInit(&driverInfo);
+    ASIOError err = ASIOInit(&g_driverInfo);
     if (err != ASE_OK) {
         asioDrivers->removeCurrentDriver();
         delete asioDrivers;
@@ -60,8 +63,8 @@ static bool probeASIODevice(const char* driverName, DeviceInfo* info)
 
     // Device is attached - get information
     info->isAttached = true;
-    info->asioVersion = driverInfo.asioVersion;
-    info->driverVersion = driverInfo.driverVersion;
+    info->asioVersion = g_driverInfo.asioVersion;
+    info->driverVersion = g_driverInfo.driverVersion;
 
     // Get channel counts
     err = ASIOGetChannels(&info->numInputChannels, &info->numOutputChannels);
@@ -72,7 +75,10 @@ static bool probeASIODevice(const char* driverName, DeviceInfo* info)
     }
 
     // Clean up
-    ASIOExit();
+    // IMPORTANT: We do NOT call ASIOExit() here!
+    // The ASIO driver crashes if ASIOExit() is called without first calling
+    // ASIOStart() and setting up buffers properly. Since we're just probing
+    // device capabilities, we simply unload the driver using removeCurrentDriver().
     asioDrivers->removeCurrentDriver();
     delete asioDrivers;
 
@@ -91,7 +97,6 @@ int main(int argc, const char** argv)
     printf("================================================================================\n\n");
 
     // Get list of ASIO drivers
-    AsioDrivers asioDrivers;
     char* driverNames[32];
     char driverNameBuffer[32][256];
 
@@ -99,7 +104,13 @@ int main(int argc, const char** argv)
         driverNames[i] = driverNameBuffer[i];
     }
 
-    long numDrivers = asioDrivers.getDriverNames(driverNames, 32);
+    // Create AsioDrivers object just to get names, then destroy it
+    // before probing devices to avoid having multiple instances
+    long numDrivers;
+    {
+        AsioDrivers asioDrivers;
+        numDrivers = asioDrivers.getDriverNames(driverNames, 32);
+    } // asioDrivers destroyed here
 
     if (numDrivers == 0) {
         printf("No ASIO drivers found.\n");

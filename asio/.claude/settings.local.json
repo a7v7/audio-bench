@@ -14,7 +14,8 @@
       "Bash(ldd:*)",
       "Bash(./ab_list_dev_asio.exe:*)",
       "Bash(TMPDIR=/tmp TMP=/tmp TEMP=/tmp gcc:*)",
-      "Bash(./ab_list_dev.exe:*)"
+      "Bash(./ab_list_dev.exe:*)",
+      "Bash(../bin/ab_list_dev_asio.exe:*)"
     ],
     "deny": [],
     "ask": []
