@@ -31,6 +31,11 @@ CXX      = g++
 RM       = rm -rf
 MKDIR    = mkdir -p
 
+# Export temp directory for Windows g++ compilation
+export TMPDIR=/tmp
+export TMP=/tmp
+export TEMP=/tmp
+
 #-------------------------------------------------------------------------------
 # Directories
 #-------------------------------------------------------------------------------
@@ -55,7 +60,8 @@ LDFLAGS  = -lm -lole32 -loleaut32 -lpopt
 #-------------------------------------------------------------------------------
 # Source files
 #-------------------------------------------------------------------------------
-MAIN_SRC = ab_acq_asio.cpp
+ACQ_SRC = ab_acq_asio.cpp
+LIST_SRC = ab_list_dev_asio.cpp
 
 # ASIO SDK sources needed for host application
 ASIO_SOURCES = \
@@ -64,34 +70,42 @@ ASIO_SOURCES = \
     $(ASIO_PC)/asiolist.cpp
 
 # Object files
-MAIN_OBJ = $(OBJ_DIR)/ab_acq_asio.o
+ACQ_OBJ = $(OBJ_DIR)/ab_acq_asio.o
+LIST_OBJ = $(OBJ_DIR)/ab_list_dev_asio.o
 ASIO_OBJS = $(OBJ_DIR)/asio.o \
             $(OBJ_DIR)/asiodrivers.o \
             $(OBJ_DIR)/asiolist.o
 
-ALL_OBJS = $(MAIN_OBJ) $(ASIO_OBJS)
-
 #-------------------------------------------------------------------------------
-# Target executable
+# Target executables
 #-------------------------------------------------------------------------------
-TARGET = ab_acq_asio.exe
+TARGET_ACQ = ab_acq_asio.exe
+TARGET_LIST = ab_list_dev_asio.exe
+TARGETS = $(TARGET_ACQ) $(TARGET_LIST)
 
 #-------------------------------------------------------------------------------
 # Main target
 #-------------------------------------------------------------------------------
-all: $(BIN_DIR)/$(TARGET)
+all: $(BIN_DIR)/$(TARGET_ACQ) $(BIN_DIR)/$(TARGET_LIST)
 
 #-------------------------------------------------------------------------------
-# Build executable
+# Build executables
 #-------------------------------------------------------------------------------
-$(BIN_DIR)/$(TARGET): $(ALL_OBJS) | $(BIN_DIR)
-	$(CXX) $(ALL_OBJS) $(LDFLAGS) -o $@
+$(BIN_DIR)/$(TARGET_ACQ): $(ACQ_OBJ) $(ASIO_OBJS) | $(BIN_DIR)
+	$(CXX) $(ACQ_OBJ) $(ASIO_OBJS) $(LDFLAGS) -o $@
+	@echo "Built: $@"
+
+$(BIN_DIR)/$(TARGET_LIST): $(LIST_OBJ) $(ASIO_OBJS) | $(BIN_DIR)
+	$(CXX) $(LIST_OBJ) $(ASIO_OBJS) -lm -lole32 -loleaut32 -o $@
 	@echo "Built: $@"
 
 #-------------------------------------------------------------------------------
-# Compile main source
+# Compile main sources
 #-------------------------------------------------------------------------------
 $(OBJ_DIR)/ab_acq_asio.o: ab_acq_asio.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/ab_list_dev_asio.o: ab_list_dev_asio.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 #-------------------------------------------------------------------------------
@@ -120,7 +134,8 @@ $(BIN_DIR):
 #-------------------------------------------------------------------------------
 clean:
 	$(RM) $(OBJ_DIR)
-	$(RM) $(BIN_DIR)/$(TARGET)
+	$(RM) $(BIN_DIR)/$(TARGET_ACQ)
+	$(RM) $(BIN_DIR)/$(TARGET_LIST)
 	@echo "Cleaned build artifacts"
 
 #-------------------------------------------------------------------------------
@@ -134,9 +149,11 @@ install: all
 # Help
 #-------------------------------------------------------------------------------
 help:
-	@echo "ab_acq_asio Makefile"
+	@echo "ASIO Tools Makefile"
 	@echo "Available targets:"
-	@echo "  all       - Build ab_acq_asio.exe (default)"
+	@echo "  all       - Build all ASIO tools (default)"
+	@echo "              - ab_acq_asio.exe (audio acquisition)"
+	@echo "              - ab_list_dev_asio.exe (device listing)"
 	@echo "  clean     - Remove build artifacts"
 	@echo "  install   - Note about installation"
 	@echo "  help      - Show this help message"

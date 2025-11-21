@@ -9,7 +9,12 @@
       "Bash(ldd C:/dev/audio-bench/bin/ab_acq_asio.exe)",
       "Bash(./ab_acq_asio.exe:*)",
       "Bash(echo:*)",
-      "Bash(export PATH=\"/c/msys64/ucrt64/bin:$PATH\")"
+      "Bash(export PATH=\"/c/msys64/ucrt64/bin:$PATH\")",
+      "Bash(TMPDIR=/tmp TMP=/tmp TEMP=/tmp g++:*)",
+      "Bash(ldd:*)",
+      "Bash(./ab_list_dev_asio.exe:*)",
+      "Bash(TMPDIR=/tmp TMP=/tmp TEMP=/tmp gcc:*)",
+      "Bash(./ab_list_dev.exe:*)"
     ],
     "deny": [],
     "ask": []

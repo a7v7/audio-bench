@@ -8,7 +8,9 @@ This is the **ASIO extension subdirectory** of the audio-bench project. It provi
 
 **Key Distinction:**
 - **Main project (`ab_acq`)**: Uses PortAudio/WASAPI for consumer audio devices
-- **This ASIO extension (`ab_acq_asio`)**: Direct ASIO protocol for professional audio interfaces with low-latency requirements
+- **This ASIO extension**: Direct ASIO protocol for professional audio interfaces with low-latency requirements
+  - `ab_acq_asio`: Audio acquisition from ASIO devices
+  - `ab_list_dev_asio`: Device enumeration and status checking
 - **Platform**: Windows-only (ASIO SDK is Windows-specific)
 
 ## Build System
@@ -19,13 +21,13 @@ This subdirectory has its **own independent Makefile**, separate from the parent
 
 ```bash
 # From asio/ directory
-make              # Build ab_acq_asio.exe
+make              # Build all ASIO tools (ab_acq_asio.exe, ab_list_dev_asio.exe)
 make clean        # Remove build artifacts
 make help         # Show available targets
 ```
 
 **Output Location:**
-- Binary: `../bin/ab_acq_asio.exe` (goes into parent project's bin directory)
+- Binaries: `../bin/ab_acq_asio.exe` and `../bin/ab_list_dev_asio.exe` (parent project's bin directory)
 - Object files: `obj/` (local to asio/ subdirectory)
 
 ### Build Requirements
@@ -46,8 +48,9 @@ make help         # Show available targets
 
 ### What Gets Compiled
 
-The build compiles four source files:
-1. `ab_acq_asio.cpp` (main application)
+The build compiles the following sources:
+1. `ab_acq_asio.cpp` (audio acquisition application)
+2. `ab_list_dev_asio.cpp` (device listing application)
 2. `ASIOSDK/common/asio.cpp` (ASIO host interface)
 3. `ASIOSDK/host/asiodrivers.cpp` (driver management)
 4. `ASIOSDK/host/pc/asiolist.cpp` (Windows COM registry access)
@@ -153,23 +156,38 @@ The ASIO 2.3.4 SDK is embedded in `ASIOSDK/`:
 
 ## Common Development Tasks
 
+### Device Enumeration
+
+```bash
+# Quick device status check - lists all ASIO drivers and their attachment status
+./ab_list_dev_asio.exe
+
+# Output shows:
+# - Device index and name
+# - Status (ATTACHED or NOT ATTACHED)
+# - For attached devices: input/output channel counts, ASIO version, driver version
+```
+
 ### Testing with Real Hardware
 
 ```bash
-# 1. List available ASIO drivers
+# 1. Check which devices are attached
+./ab_list_dev_asio.exe
+
+# 2. List available ASIO drivers (alternative method)
 ./ab_acq_asio.exe -list
 
-# 2. Check driver capabilities
+# 3. Check driver capabilities
 ./ab_acq_asio.exe -driver "Your Driver Name" -channels
 
-# 3. Record test sample
+# 4. Record test sample
 ./ab_acq_asio.exe -driver "Your Driver Name" -acquire \
     -channel 0 -samples 48000 -output test.raw -rate 48000
 
-# 4. Convert to WAV for analysis
+# 5. Convert to WAV for analysis
 ffmpeg -f f32le -ar 48000 -ac 1 -i test.raw test.wav
 
-# 5. Use parent project tools to analyze
+# 6. Use parent project tools to analyze
 ../bin/ab_audio_analyze test.wav
 ```
 
@@ -196,12 +214,13 @@ The code properly initializes/uninitializes COM (`CoInitialize`/`CoUninitialize`
 
 ## File Organization
 
-- `ab_acq_asio.cpp` - Main application source (486 lines)
+- `ab_acq_asio.cpp` - Audio acquisition application (486 lines)
+- `ab_list_dev_asio.cpp` - Device enumeration application (136 lines)
 - `acq_asio.md` - Comprehensive user documentation with examples and troubleshooting
 - `Makefile` - Build system (separate from parent project)
 - `ASIOSDK/` - Complete Steinberg ASIO 2.3.4 SDK
 - `obj/` - Object files during build (created by make, not in git)
-- `../bin/` - Output directory for compiled executable
+- `../bin/` - Output directory for compiled executables
 
 ## Documentation Reference
 
