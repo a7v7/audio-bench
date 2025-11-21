@@ -8,7 +8,10 @@
       "Bash(./bin/ab_gain_calc.exe:*)",
       "Bash(./ab_gain_calc.exe:*)",
       "Bash(./bin/ab_audio_analyze.exe:*)",
-      "Bash(sox:*)"
+      "Bash(sox:*)",
+      "Bash(./bin/ab_thd_calc:*)",
+      "Bash(./bin/ab_thd_calc.exe:*)",
+      "Bash(./ab_thd_calc.exe:*)"
     ],
     "deny": [],
     "ask": []
