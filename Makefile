@@ -31,44 +31,27 @@ CC = gcc
 CFLAGS = -Wall -O2 -std=c11
 LDFLAGS = -lm -lsndfile -lfftw3 -lpopt -lportaudio
 
-# Export temp directory to avoid Windows permission issues
-export TMP=/c/msys64/tmp
-export TEMP=/c/msys64/tmp
-export TMPDIR=/c/msys64/tmp
-
-# Directories
-SRC_DIR = src
-BIN_DIR = bin
-OBJ_DIR = obj
-
-#-------------------------------------------------------------------------------
-# Create directories if they don't exist
-#-------------------------------------------------------------------------------
-$(shell mkdir -p $(BIN_DIR) $(OBJ_DIR))
-
-#-------------------------------------------------------------------------------
-# Source files (add your C programs here)
-#-------------------------------------------------------------------------------
-SOURCES = $(wildcard $(SRC_DIR)/*.c)
-OBJECTS = $(SOURCES:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
-BINARIES = $(SOURCES:$(SRC_DIR)/%.c=$(BIN_DIR)/%)
-
 #-------------------------------------------------------------------------------
 # Main target
 #-------------------------------------------------------------------------------
-all: $(BINARIES)
+all:	ab_acq ab_audio_analyze ab_freq_response ab_gain_calc ab_list_dev ab_list_wav ab_wav_fft
 
-#-------------------------------------------------------------------------------
-# Compile C files to object files
-#-------------------------------------------------------------------------------
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+ab_acq:	src/ab_acq.c
+	$(CC) $< $(CFLAGS) $(LDFLAGS) -o $@
 
-#-------------------------------------------------------------------------------
-# Link object files to binaries
-#-------------------------------------------------------------------------------
-$(BIN_DIR)/%: $(OBJ_DIR)/%.o
-	$(CC) $< $(LDFLAGS) -o $@
+#ab_acq_asio:
+
+ab_audio_analyze:
+
+ab_freq_response:
+
+ab_gain_calc:
+
+ab_list_dev:
+
+ab_list_wav:
+
+ab_wav_fft:
 
 #-------------------------------------------------------------------------------
 # Start of targets
