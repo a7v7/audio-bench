@@ -55,7 +55,7 @@ CXXFLAGS = -Wall -O2 -std=c++11 \
            -I$(ASIO_PC)
 
 # Windows COM libraries required for ASIO
-LDFLAGS  = -lm -lole32 -loleaut32 -lpopt
+LDFLAGS  = -lm -lole32 -loleaut32 -lpopt -lsndfile
 
 #-------------------------------------------------------------------------------
 # Source files
@@ -96,7 +96,7 @@ $(BIN_DIR)/$(TARGET_ACQ): $(ACQ_OBJ) $(ASIO_OBJS) | $(BIN_DIR)
 	@echo "Built: $@"
 
 $(BIN_DIR)/$(TARGET_LIST): $(LIST_OBJ) $(ASIO_OBJS) | $(BIN_DIR)
-	$(CXX) $(LIST_OBJ) $(ASIO_OBJS) -lm -lole32 -loleaut32 -o $@
+	$(CXX) $(LIST_OBJ) $(ASIO_OBJS) -lm -lole32 -loleaut32 -lpopt -o $@
 	@echo "Built: $@"
 
 #-------------------------------------------------------------------------------

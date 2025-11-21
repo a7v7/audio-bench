@@ -15,7 +15,8 @@
       "Bash(./ab_list_dev_asio.exe:*)",
       "Bash(TMPDIR=/tmp TMP=/tmp TEMP=/tmp gcc:*)",
       "Bash(./ab_list_dev.exe:*)",
-      "Bash(../bin/ab_list_dev_asio.exe:*)"
+      "Bash(../bin/ab_list_dev_asio.exe:*)",
+      "Bash(../bin/ab_audio_analyze:*)"
     ],
     "deny": [],
     "ask": []

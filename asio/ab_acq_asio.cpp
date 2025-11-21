@@ -1,8 +1,33 @@
+//------------------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2025 Anthony Verbeck
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//------------------------------------------------------------------------------
+
 /*
- * ab_acq_asio.cpp - ASIO Audio Acquisition Tool
- * Part of the audio_bench suite
- * 
- * Enumerates and acquires audio samples from ASIO devices
+ * ab_acq_asio.cpp
+ * ASIO Audio Acquisition Tool for audio-bench
+ *
+ * Windows-only ASIO interface for professional audio hardware
+ * Acquires audio samples from ASIO devices with low latency
  */
 
 #include <windows.h>
@@ -11,6 +36,7 @@
 #include <string.h>
 #include <math.h>
 #include <popt.h>
+#include <sndfile.h>
 #include "asiosys.h"
 #include "asio.h"
 #include "iasiodrv.h"
@@ -29,10 +55,12 @@ static bool acquisitionActive = false;
 static long totalSamplesProcessed = 0;
 
 // Acquisition parameters
-static FILE* outputFile = nullptr;
+static SNDFILE* outputFile = nullptr;
+static SF_INFO sfInfo;
 static long channelToRecord = 0;
 static long samplesToAcquire = 0;
 static long samplesAcquired = 0;
+static long outputBitDepth = 32;
 
 // Forward declarations
 static void bufferSwitch(long index, ASIOBool processNow);
@@ -57,12 +85,12 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
 
     // Process the input buffer for the channel we're recording
     ASIOBufferInfo* info = &bufferInfos[channelToRecord];
-    
+
     if (info->buffers[index]) {
         ASIOChannelInfo channelInfo;
-        channelInfo.channel = channelToRecord;
+        channelInfo.channel = info->channelNum;
         channelInfo.isInput = ASIOTrue;
-        asioDriver->getChannelInfo(&channelInfo);
+        ASIOGetChannelInfo(&channelInfo);
         
         long bufferSize = preferredBufferSize;
         long samplesToWrite = bufferSize;
@@ -73,14 +101,14 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
         
         // Convert samples based on ASIO sample type
         void* buffer = info->buffers[index];
-        
+        float* floatBuffer = new float[samplesToWrite];
+
         switch (channelInfo.type) {
             case ASIOSTInt16LSB:
             {
                 short* samples = (short*)buffer;
                 for (long i = 0; i < samplesToWrite; i++) {
-                    float sample = samples[i] / 32768.0f;
-                    fwrite(&sample, sizeof(float), 1, outputFile);
+                    floatBuffer[i] = samples[i] / 32768.0f;
                 }
                 break;
             }
@@ -89,8 +117,7 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
                 unsigned char* samples = (unsigned char*)buffer;
                 for (long i = 0; i < samplesToWrite; i++) {
                     int s24 = (samples[i*3] << 8) | (samples[i*3+1] << 16) | (samples[i*3+2] << 24);
-                    float sample = s24 / 2147483648.0f;
-                    fwrite(&sample, sizeof(float), 1, outputFile);
+                    floatBuffer[i] = s24 / 2147483648.0f;
                 }
                 break;
             }
@@ -98,30 +125,59 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
             {
                 int* samples = (int*)buffer;
                 for (long i = 0; i < samplesToWrite; i++) {
-                    float sample = samples[i] / 2147483648.0f;
-                    fwrite(&sample, sizeof(float), 1, outputFile);
+                    floatBuffer[i] = samples[i] / 2147483648.0f;
                 }
                 break;
             }
             case ASIOSTFloat32LSB:
             {
                 float* samples = (float*)buffer;
-                fwrite(samples, sizeof(float), samplesToWrite, outputFile);
+                memcpy(floatBuffer, samples, samplesToWrite * sizeof(float));
                 break;
             }
             case ASIOSTFloat64LSB:
             {
                 double* samples = (double*)buffer;
                 for (long i = 0; i < samplesToWrite; i++) {
-                    float sample = (float)samples[i];
-                    fwrite(&sample, sizeof(float), 1, outputFile);
+                    floatBuffer[i] = (float)samples[i];
                 }
                 break;
             }
             default:
                 printf("Unsupported sample type: %ld\n", channelInfo.type);
-                break;
+                delete[] floatBuffer;
+                return nullptr;
         }
+
+        // Write to WAV file based on bit depth
+        if (outputBitDepth == 16) {
+            // Convert float to 16-bit signed integer
+            short* shortBuffer = new short[samplesToWrite];
+            for (long i = 0; i < samplesToWrite; i++) {
+                // Clamp to [-1.0, 1.0] and convert to 16-bit
+                float sample = floatBuffer[i];
+                if (sample > 1.0f) sample = 1.0f;
+                if (sample < -1.0f) sample = -1.0f;
+                shortBuffer[i] = (short)(sample * 32767.0f);
+            }
+            sf_write_short(outputFile, shortBuffer, samplesToWrite);
+            delete[] shortBuffer;
+        } else if (outputBitDepth == 24) {
+            // Convert float to 32-bit integer (libsndfile handles 24-bit packing)
+            int* intBuffer = new int[samplesToWrite];
+            for (long i = 0; i < samplesToWrite; i++) {
+                // Clamp to [-1.0, 1.0] and convert to 24-bit (stored in 32-bit int)
+                float sample = floatBuffer[i];
+                if (sample > 1.0f) sample = 1.0f;
+                if (sample < -1.0f) sample = -1.0f;
+                intBuffer[i] = (int)(sample * 8388607.0f);  // 2^23 - 1
+            }
+            sf_write_int(outputFile, intBuffer, samplesToWrite);
+            delete[] intBuffer;
+        } else {  // 32-bit float
+            sf_write_float(outputFile, floatBuffer, samplesToWrite);
+        }
+        delete[] floatBuffer;
         
         samplesAcquired += samplesToWrite;
         totalSamplesProcessed += samplesToWrite;
@@ -327,13 +383,17 @@ int main(int argc, const char** argv)
     int listMode = 0;
     int channelsMode = 0;
     int acquireMode = 0;
+    int versionFlag = 0;
     char* driverName = nullptr;
     long inputChannel = 0;
-    long samples = 48000;
+    double duration = 1.0;  // Duration in seconds
+    long bitDepth = 32;     // Bit depth: 16, 24, or 32
     char* outputFilename = nullptr;
     double requestedRate = 0.0;
 
     struct poptOption options[] = {
+        {"version", 'v', POPT_ARG_NONE, &versionFlag, 0,
+         "Show version information", nullptr},
         {"list", 'l', POPT_ARG_NONE, &listMode, 0,
          "List available ASIO drivers", nullptr},
         {"driver", 'd', POPT_ARG_STRING, &driverName, 0,
@@ -344,10 +404,12 @@ int main(int argc, const char** argv)
          "Acquire audio samples", nullptr},
         {"channel", 'c', POPT_ARG_LONG, &inputChannel, 0,
          "Input channel number (default: 0)", "NUM"},
-        {"samples", 's', POPT_ARG_LONG, &samples, 0,
-         "Number of samples to acquire (default: 48000)", "NUM"},
+        {"time", 't', POPT_ARG_DOUBLE, &duration, 0,
+         "Recording duration in seconds (default: 1.0)", "SECONDS"},
+        {"bits", 'b', POPT_ARG_LONG, &bitDepth, 0,
+         "Bit depth: 16, 24, or 32 (default: 32)", "BITS"},
         {"output", 'o', POPT_ARG_STRING, &outputFilename, 0,
-         "Output file (32-bit float raw PCM, default: output.raw)", "FILE"},
+         "Output WAV file (default: output.wav)", "FILE"},
         {"rate", 'r', POPT_ARG_DOUBLE, &requestedRate, 0,
          "Sample rate in Hz (default: use current driver rate)", "HZ"},
         POPT_AUTOHELP
@@ -365,7 +427,8 @@ int main(int argc, const char** argv)
         "Examples:\n"
         "  ab_acq_asio --list\n"
         "  ab_acq_asio -d \"ASIO4ALL v2\" --channels\n"
-        "  ab_acq_asio -d \"ASIO4ALL v2\" -a -c 0 -s 96000 -o test.raw -r 48000\n");
+        "  ab_acq_asio -d \"ASIO4ALL v2\" -a -c 0 -t 2.0 -o test.wav -r 48000\n"
+        "  ab_acq_asio -d \"ASIO4ALL v2\" -a -c 0 -t 5.0 -b 24 -o test_24bit.wav\n");
 
     int rc = poptGetNextOpt(popt_ctx);
     if (rc < -1) {
@@ -377,9 +440,19 @@ int main(int argc, const char** argv)
         return 1;
     }
 
+    // Handle version mode
+    if (versionFlag) {
+        printf("ab_acq_asio version 1.0.0\n");
+        printf("ASIO Audio Acquisition Tool for audio-bench\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        poptFreeContext(popt_ctx);
+        CoUninitialize();
+        return 0;
+    }
+
     // Set default output filename if not specified
     if (outputFilename == nullptr && acquireMode) {
-        outputFilename = const_cast<char*>("output.raw");
+        outputFilename = const_cast<char*>("output.wav");
     }
 
     // Execute requested operation
@@ -440,24 +513,73 @@ int main(int argc, const char** argv)
                 return 1;
             }
 
+            // Validate bit depth
+            if (bitDepth != 16 && bitDepth != 24 && bitDepth != 32) {
+                printf("Error: Bit depth must be 16, 24, or 32 (got %ld)\n", bitDepth);
+                shutdownASIO();
+                poptFreeContext(popt_ctx);
+                CoUninitialize();
+                return 1;
+            }
+
+            // Validate and calculate sample count from duration
+            if (duration <= 0.0) {
+                printf("Error: Duration must be greater than 0 seconds\n");
+                shutdownASIO();
+                poptFreeContext(popt_ctx);
+                CoUninitialize();
+                return 1;
+            }
+
+            long samples = (long)(duration * currentSampleRate);
+            if (samples == 0) {
+                printf("Error: Duration too short for sample rate %.0f Hz\n", currentSampleRate);
+                shutdownASIO();
+                poptFreeContext(popt_ctx);
+                CoUninitialize();
+                return 1;
+            }
+
             // Open output file
-            outputFile = fopen(outputFilename, "wb");
+            memset(&sfInfo, 0, sizeof(sfInfo));
+            sfInfo.samplerate = (int)currentSampleRate;
+            sfInfo.channels = 1;  // Mono recording
+
+            // Set format based on bit depth
+            if (bitDepth == 16) {
+                sfInfo.format = SF_FORMAT_WAV | SF_FORMAT_PCM_16;
+            } else if (bitDepth == 24) {
+                sfInfo.format = SF_FORMAT_WAV | SF_FORMAT_PCM_24;
+            } else {  // 32-bit
+                sfInfo.format = SF_FORMAT_WAV | SF_FORMAT_FLOAT;
+            }
+
+            outputFile = sf_open(outputFilename, SFM_WRITE, &sfInfo);
             if (!outputFile) {
                 printf("Error: Cannot open output file: %s\n", outputFilename);
+                printf("libsndfile error: %s\n", sf_strerror(nullptr));
                 shutdownASIO();
                 poptFreeContext(popt_ctx);
                 CoUninitialize();
                 return 1;
             }
             
-            printf("\nAcquiring %ld samples from channel %ld at %.0f Hz\n",
-                   samples, inputChannel, currentSampleRate);
+            printf("\nAcquiring %.2f seconds (%" "ld samples) from channel %ld at %.0f Hz\n",
+                   duration, samples, inputChannel, currentSampleRate);
             printf("Output file: %s\n", outputFilename);
-            printf("Format: 32-bit float raw PCM\n\n");
+
+            // Display format based on bit depth
+            if (bitDepth == 16) {
+                printf("Format: WAV file (16-bit PCM, mono)\n\n");
+            } else if (bitDepth == 24) {
+                printf("Format: WAV file (24-bit PCM, mono)\n\n");
+            } else {
+                printf("Format: WAV file (32-bit float, mono)\n\n");
+            }
             
             // Setup buffers and start acquisition
             if (!setupASIOBuffers(inputChannel)) {
-                fclose(outputFile);
+                sf_close(outputFile);
                 shutdownASIO();
                 poptFreeContext(popt_ctx);
                 CoUninitialize();
@@ -466,12 +588,13 @@ int main(int argc, const char** argv)
 
             samplesToAcquire = samples;
             samplesAcquired = 0;
+            outputBitDepth = bitDepth;
             acquisitionActive = true;
 
             ASIOError err = ASIOStart();
             if (err != ASE_OK) {
                 printf("ASIOStart failed with error: %ld\n", err);
-                fclose(outputFile);
+                sf_close(outputFile);
                 shutdownASIO();
                 poptFreeContext(popt_ctx);
                 CoUninitialize();
@@ -488,11 +611,9 @@ int main(int argc, const char** argv)
                     fflush(stdout);
                 }
             }
-            
-            fclose(outputFile);
-            printf("\nAcquisition complete. Output written to: %s\n", outputFilename);
-            printf("To convert to WAV: ffmpeg -f f32le -ar %.0f -ac 1 -i %s output.wav\n",
-                   currentSampleRate, outputFilename);
+
+            sf_close(outputFile);
+            printf("\nAcquisition complete. WAV file written to: %s\n", outputFilename);
         }
 
         shutdownASIO();

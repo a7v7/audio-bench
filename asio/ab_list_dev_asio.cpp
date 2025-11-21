@@ -1,14 +1,40 @@
+//------------------------------------------------------------------------------
+// MIT License
+//
+// Copyright (c) 2025 Anthony Verbeck
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+//------------------------------------------------------------------------------
+
 /*
- * ab_list_dev_asio.cpp - ASIO Device Lister
- * Part of the audio_bench suite
+ * ab_list_dev_asio.cpp
+ * ASIO Device Lister for audio-bench
  *
- * Lists all ASIO devices and attempts to open each one to check status
+ * Lists all ASIO devices and their status
+ * Shows channel counts, version info for attached devices
  */
 
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <popt.h>
 #include "asiosys.h"
 #include "asio.h"
 #include "iasiodrv.h"
@@ -92,6 +118,46 @@ static bool probeASIODevice(const char* driverName, DeviceInfo* info)
 int main(int argc, const char** argv)
 {
     CoInitialize(nullptr);
+
+    // Command-line options
+    int versionFlag = 0;
+
+    struct poptOption options[] = {
+        {"version", 'v', POPT_ARG_NONE, &versionFlag, 0,
+         "Show version information", nullptr},
+        POPT_AUTOHELP
+        POPT_TABLEEND
+    };
+
+    poptContext popt_ctx = poptGetContext(nullptr, argc, argv, options, 0);
+    poptSetOtherOptionHelp(popt_ctx,
+        "[OPTIONS]\n\n"
+        "ASIO Device Lister - Lists all ASIO devices and their status\n\n"
+        "Examples:\n"
+        "  ab_list_dev_asio           # List all ASIO devices\n"
+        "  ab_list_dev_asio --version # Show version information\n");
+
+    int rc = poptGetNextOpt(popt_ctx);
+    if (rc < -1) {
+        fprintf(stderr, "Error: %s: %s\n",
+                poptBadOption(popt_ctx, POPT_BADOPTION_NOALIAS),
+                poptStrerror(rc));
+        poptFreeContext(popt_ctx);
+        CoUninitialize();
+        return 1;
+    }
+
+    // Handle version mode
+    if (versionFlag) {
+        printf("ab_list_dev_asio version 1.0.0\n");
+        printf("ASIO Device Lister for audio-bench\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        poptFreeContext(popt_ctx);
+        CoUninitialize();
+        return 0;
+    }
+
+    poptFreeContext(popt_ctx);
 
     printf("ASIO Device List\n");
     printf("================================================================================\n\n");
