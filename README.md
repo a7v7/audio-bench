@@ -157,7 +157,7 @@ Add the following to your shell configuration file (`.bashrc`, `.zshrc`, etc.):
 
 ```bash
 export AUDIO_BENCH=/opt/audio-bench
-export PATH=$AUDIO_BENCH/bin:$PATH
+export PATH=$PATH:$AUDIO_BENCH/bin:$AUDIO_BENCH/scripts
 ```
 
 This allows you to run audio-bench tools from any directory without specifying the full path.

@@ -97,7 +97,7 @@ clean:
 # Install (copy binaries to /c/msys64/opt)
 #-------------------------------------------------------------------------------
 INSTALL_DIR = /c/msys64/opt/audio-bench
-install: all
+install:
 	@echo "Creating installation directory $(INSTALL_DIR)"
 	mkdir -p $(INSTALL_DIR)
 	@echo "Installing binaries to $(INSTALL_DIR)/bin"

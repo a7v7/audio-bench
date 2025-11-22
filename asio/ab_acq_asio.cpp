@@ -260,7 +260,7 @@ static bool initASIO(const char* driverName)
     
     printf("ASIO Driver: %s\n", driverInfo.name);
     printf("Version: %ld\n", driverInfo.asioVersion);
-    printf("Driver Version: %ld\n", driverInfo.driverVersion);
+    printf("Driver Version: 0x%08lx\n", driverInfo.driverVersion);
     
     // Get channels
     err = ASIOGetChannels(&numInputChannels, &numOutputChannels);
@@ -475,7 +475,7 @@ int main(int argc, const char** argv)
                 channelInfo.channel = i;
                 channelInfo.isInput = ASIOTrue;
                 if (ASIOGetChannelInfo(&channelInfo) == ASE_OK) {
-                    printf("  %2ld: %s (Type: %ld)\n", i, channelInfo.name, channelInfo.type);
+                    printf("  %2ld: %s (Type: 0x%lx)\n", i, channelInfo.name, channelInfo.type);
                 }
             }
 
@@ -485,7 +485,7 @@ int main(int argc, const char** argv)
                 channelInfo.channel = i;
                 channelInfo.isInput = ASIOFalse;
                 if (ASIOGetChannelInfo(&channelInfo) == ASE_OK) {
-                    printf("  %2ld: %s (Type: %ld)\n", i, channelInfo.name, channelInfo.type);
+                    printf("  %2ld: %s (Type: 0x%lx)\n", i, channelInfo.name, channelInfo.type);
                 }
             }
         } else if (acquireMode) {

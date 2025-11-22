@@ -197,7 +197,7 @@ int main(int argc, const char** argv)
             printf("           Input channels:  %ld\n", info.numInputChannels);
             printf("           Output channels: %ld\n", info.numOutputChannels);
             printf("           ASIO version:    %ld\n", info.asioVersion);
-            printf("           Driver version:  %ld\n", info.driverVersion);
+            printf("           Driver version:  0x%08lx\n", info.driverVersion);
         } else {
             printf("           Status: NOT ATTACHED\n");
         }
