@@ -250,7 +250,7 @@ static void print_device_row(int device_index,
 //------------------------------------------------------------------------------
 //	Format channel info
 //------------------------------------------------------------------------------
-    char channels_str[16];
+    char channels_str[64];
     if (device_info->maxInputChannels > 0 && device_info->maxOutputChannels > 0) {
         snprintf(channels_str, sizeof(channels_str), "%d/%d",
                 device_info->maxInputChannels,
