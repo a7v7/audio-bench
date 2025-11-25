@@ -1,35 +1,26 @@
 //------------------------------------------------------------------------------
-// MIT License
+//	The MIT License (MIT)
 //
-// Copyright (c) 2025 Anthony Verbeck
+//	Copyright (c) 2023 A.C. Verbeck
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+//	Permission is hereby granted, free of charge, to any person obtaining a copy
+//	of this software and associated documentation files (the "Software"), to deal
+//	in the Software without restriction, including without limitation the rights
+//	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//	copies of the Software, and to permit persons to whom the Software is
+//	furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//	The above copyright notice and this permission notice shall be included in
+//	all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+//	THE SOFTWARE.
 //------------------------------------------------------------------------------
-
-/*
- * ab_gain_calc.c
- * Gain difference calculator for audio-bench
- *
- * Calculates the RMS level for a specified duration of two audio files
- * and computes the gain difference in dB between them.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,15 +30,21 @@
 
 #define BUFFER_SIZE 4096
 
-/**
- * Calculate RMS value for specified duration of an audio file
- *
- * @param filename Path to the audio file
- * @param duration Duration in seconds to analyze
- * @param rms_out Pointer to store the calculated RMS value
- * @return 0 on success, -1 on error
- */
-int calculate_rms(const char *filename, double duration, double *rms_out) {
+//------------------------------------------------------------------------------
+//	Name:		calculate_rms
+//
+//	Returns:	0 on success, -1 on error
+//
+//------------------------------------------------------------------------------
+//	Detailed description:
+//	- Calculates RMS value for specified duration of an audio file
+//	- Opens audio file using libsndfile
+//	- Processes specified duration of audio
+//	- Sums all channels together for overall RMS
+//	- Stores calculated RMS value in output parameter
+//------------------------------------------------------------------------------
+int calculate_rms(const char *filename, double duration, double *rms_out)
+{
     SF_INFO info;
     SNDFILE *file;
     double buffer[BUFFER_SIZE];
@@ -57,7 +54,9 @@ int calculate_rms(const char *filename, double duration, double *rms_out) {
 
     memset(&info, 0, sizeof(info));
 
-    // Open the audio file
+//------------------------------------------------------------------------------
+//	Open the audio file
+//------------------------------------------------------------------------------
     file = sf_open(filename, SFM_READ, &info);
     if (!file) {
         fprintf(stderr, "Error: Cannot open file '%s'\n", filename);
@@ -65,10 +64,14 @@ int calculate_rms(const char *filename, double duration, double *rms_out) {
         return -1;
     }
 
-    // Calculate how many frames to read based on duration
+//------------------------------------------------------------------------------
+//	Calculate how many frames to read based on duration
+//------------------------------------------------------------------------------
     sf_count_t frames_to_read = (sf_count_t)(duration * info.samplerate);
 
-    // Ensure we don't try to read more frames than available
+//------------------------------------------------------------------------------
+//	Ensure we don't try to read more frames than available
+//------------------------------------------------------------------------------
     if (frames_to_read > info.frames) {
         frames_to_read = info.frames;
         fprintf(stderr, "Warning: File '%s' is shorter than %.2f seconds (%.2f seconds available)\n",
@@ -77,14 +80,18 @@ int calculate_rms(const char *filename, double duration, double *rms_out) {
 
     sf_count_t frames_remaining = frames_to_read;
 
-    // Process audio in chunks
+//------------------------------------------------------------------------------
+//	Process audio in chunks
+//------------------------------------------------------------------------------
     while (frames_remaining > 0 &&
            (frames_read = sf_readf_double(file, buffer,
                                          (frames_remaining < BUFFER_SIZE / info.channels) ?
                                          frames_remaining : BUFFER_SIZE / info.channels)) > 0) {
 
         for (sf_count_t i = 0; i < frames_read; i++) {
-            // Sum all channels together for overall RMS
+//------------------------------------------------------------------------------
+//	Sum all channels together for overall RMS
+//------------------------------------------------------------------------------
             for (int ch = 0; ch < info.channels; ch++) {
                 double sample = buffer[i * info.channels + ch];
                 sum_squares += sample * sample;
@@ -95,7 +102,9 @@ int calculate_rms(const char *filename, double duration, double *rms_out) {
         frames_remaining -= frames_read;
     }
 
-    // Calculate RMS
+//------------------------------------------------------------------------------
+//	Calculate RMS
+//------------------------------------------------------------------------------
     if (total_samples > 0) {
         *rms_out = sqrt(sum_squares / total_samples);
     } else {
@@ -106,11 +115,27 @@ int calculate_rms(const char *filename, double duration, double *rms_out) {
     return 0;
 }
 
-int main(int argc, char *argv[]) {
-    /* Command-line options */
+//------------------------------------------------------------------------------
+//	Main application
+//
+//	This application:
+//	- Parses command-line options
+//	- Calculates RMS for both input files
+//	- Computes gain difference in dB
+//	- Displays results
+//
+//	Libraries:
+//	- libsndfile: Used for audio file I/O
+//	- libpopt: Used for command-line parsing
+//------------------------------------------------------------------------------
+int main(int argc, char *argv[])
+{
+//------------------------------------------------------------------------------
+//	Command-line options
+//------------------------------------------------------------------------------
     char *file1 = NULL;
     char *file2 = NULL;
-    double duration = 1.0;  // Default: 1 second
+    double duration = 1.0;												//	Default: 1 second
     int verbose = 0;
     int version_flag = 0;
 
@@ -144,16 +169,20 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* Handle version mode */
+//------------------------------------------------------------------------------
+//	Handle version mode
+//------------------------------------------------------------------------------
     if (version_flag) {
         printf("ab_gain_calc version 1.0.0\n");
         printf("Gain difference calculator for audio-bench\n");
-        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        printf("Copyright (c) 2023 A.C. Verbeck\n");
         poptFreeContext(popt_ctx);
         return 0;
     }
 
-    /* Get file arguments */
+//------------------------------------------------------------------------------
+//	Get file arguments
+//------------------------------------------------------------------------------
     const char *arg1 = poptGetArg(popt_ctx);
     const char *arg2 = poptGetArg(popt_ctx);
 
@@ -167,7 +196,9 @@ int main(int argc, char *argv[]) {
     file1 = strdup(arg1);
     file2 = strdup(arg2);
 
-    /* Check for extra arguments */
+//------------------------------------------------------------------------------
+//	Check for extra arguments
+//------------------------------------------------------------------------------
     if (poptGetArg(popt_ctx) != NULL) {
         fprintf(stderr, "Error: Too many arguments\n");
         poptPrintUsage(popt_ctx, stderr, 0);
@@ -177,7 +208,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* Validate duration */
+//------------------------------------------------------------------------------
+//	Validate duration
+//------------------------------------------------------------------------------
     if (duration <= 0.0) {
         fprintf(stderr, "Error: Duration must be positive\n");
         free(file1);
@@ -195,7 +228,9 @@ int main(int argc, char *argv[]) {
         printf("\n");
     }
 
-    /* Calculate RMS for both files */
+//------------------------------------------------------------------------------
+//	Calculate RMS for both files
+//------------------------------------------------------------------------------
     double rms1, rms2;
 
     if (calculate_rms(file1, duration, &rms1) != 0) {
@@ -210,12 +245,16 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    /* Calculate dB values and gain difference */
+//------------------------------------------------------------------------------
+//	Calculate dB values and gain difference
+//------------------------------------------------------------------------------
     double rms1_db = 20.0 * log10(rms1);
     double rms2_db = 20.0 * log10(rms2);
     double gain_diff_db = rms2_db - rms1_db;
 
-    /* Output results */
+//------------------------------------------------------------------------------
+//	Output results
+//------------------------------------------------------------------------------
     printf("Gain Calculation Results:\n");
     printf("  Analysis Duration: %.2f seconds\n", duration);
     printf("\n");
@@ -237,5 +276,5 @@ int main(int argc, char *argv[]) {
 
     free(file1);
     free(file2);
-    return 0;
+    return 0;																//	Exit: status 0 (no error)
 }

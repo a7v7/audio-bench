@@ -1,38 +1,26 @@
 //------------------------------------------------------------------------------
-// MIT License
+//	The MIT License (MIT)
 //
-// Copyright (c) 2025 Anthony Verbeck
+//	Copyright (c) 2025 A.C. Verbeck
 //
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
+//	Permission is hereby granted, free of charge, to any person obtaining a copy
+//	of this software and associated documentation files (the "Software"), to deal
+//	in the Software without restriction, including without limitation the rights
+//	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+//	copies of the Software, and to permit persons to whom the Software is
+//	furnished to do so, subject to the following conditions:
 //
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
+//	The above copyright notice and this permission notice shall be included in
+//	all copies or substantial portions of the Software.
 //
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
+//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+//	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+//	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+//	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+//	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+//	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+//	THE SOFTWARE.
 //------------------------------------------------------------------------------
-
-/*
- * ab_list_wav.c - List all WAV files in current directory with their properties
- *
- * Features:
- * - Scans current directory for WAV files
- * - Displays filename, sample rate, bit depth, and length
- * - Supports multiple audio formats via libsndfile
- *
- * Dependencies: libsndfile, libpopt
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -42,33 +30,48 @@
 #include <ctype.h>
 
 //------------------------------------------------------------------------------
-// Determine bit depth from SF_INFO format field
+//	Name:		get_bit_depth
+//
+//	Returns:	Bit depth (8, 16, 24, 32, 64, or 0 for unknown)
+//
+//------------------------------------------------------------------------------
+//	Detailed description:
+//	- Determines bit depth from SF_INFO format field
+//	- Examines format subtype mask
+//	- Returns appropriate bit depth value
 //------------------------------------------------------------------------------
 int get_bit_depth(int format)
 {
     int format_subtype = format & SF_FORMAT_SUBMASK;
 
     switch (format_subtype) {
-        case SF_FORMAT_PCM_S8:
-        case SF_FORMAT_PCM_U8:
-            return 8;
-        case SF_FORMAT_PCM_16:
-            return 16;
-        case SF_FORMAT_PCM_24:
-            return 24;
-        case SF_FORMAT_PCM_32:
-            return 32;
-        case SF_FORMAT_FLOAT:
-            return 32;
-        case SF_FORMAT_DOUBLE:
-            return 64;
-        default:
-            return 0;  // Unknown
+    case SF_FORMAT_PCM_S8:
+    case SF_FORMAT_PCM_U8:
+        return 8;
+    case SF_FORMAT_PCM_16:
+        return 16;
+    case SF_FORMAT_PCM_24:
+        return 24;
+    case SF_FORMAT_PCM_32:
+        return 32;
+    case SF_FORMAT_FLOAT:
+        return 32;
+    case SF_FORMAT_DOUBLE:
+        return 64;
+    default:
+        return 0;																//	Unknown
     }
 }
 
 //------------------------------------------------------------------------------
-// Check if filename ends with .wav (case-insensitive)
+//	Name:		is_wav_file
+//
+//	Returns:	1 if filename ends with .wav, 0 otherwise
+//
+//------------------------------------------------------------------------------
+//	Detailed description:
+//	- Checks if filename ends with .wav (case-insensitive)
+//	- Used to filter directory entries
 //------------------------------------------------------------------------------
 int is_wav_file(const char *filename)
 {
@@ -85,7 +88,16 @@ int is_wav_file(const char *filename)
 }
 
 //------------------------------------------------------------------------------
-// List all WAV files in the current directory
+//	Name:		list_wav_files
+//
+//	Returns:	0 on success, -1 on error
+//
+//------------------------------------------------------------------------------
+//	Detailed description:
+//	- Scans current directory for WAV files
+//	- Opens each WAV file to read properties
+//	- Displays filename, sample rate, bit depth, and duration
+//	- Shows total count of files found
 //------------------------------------------------------------------------------
 int list_wav_files(int verbose)
 {
@@ -93,33 +105,45 @@ int list_wav_files(int verbose)
     struct dirent *entry;
     int file_count = 0;
 
-    // Open current directory
+//------------------------------------------------------------------------------
+//	Open current directory
+//------------------------------------------------------------------------------
     dir = opendir(".");
     if (!dir) {
         fprintf(stderr, "Error: Cannot open current directory\n");
         return -1;
     }
 
-    // Print header
+//------------------------------------------------------------------------------
+//	Print header
+//------------------------------------------------------------------------------
     if (verbose) {
         printf("Scanning current directory for WAV files...\n\n");
     }
     printf("%-40s %12s %10s %12s\n", "Filename", "Sample Rate", "Bit Depth", "Duration");
     printf("--------------------------------------------------------------------------------------------\n");
 
-    // Read directory entries
+//------------------------------------------------------------------------------
+//	Read directory entries
+//------------------------------------------------------------------------------
     while ((entry = readdir(dir)) != NULL) {
-        // Skip current and parent directory entries
+//------------------------------------------------------------------------------
+//	Skip current and parent directory entries
+//------------------------------------------------------------------------------
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
 
-        // Check if it's a WAV file
+//------------------------------------------------------------------------------
+//	Check if it's a WAV file
+//------------------------------------------------------------------------------
         if (!is_wav_file(entry->d_name)) {
             continue;
         }
 
-        // Open the WAV file
+//------------------------------------------------------------------------------
+//	Open the WAV file
+//------------------------------------------------------------------------------
         SF_INFO sfinfo;
         memset(&sfinfo, 0, sizeof(sfinfo));
 
@@ -130,13 +154,19 @@ int list_wav_files(int verbose)
             continue;
         }
 
-        // Get bit depth
+//------------------------------------------------------------------------------
+//	Get bit depth
+//------------------------------------------------------------------------------
         int bit_depth = get_bit_depth(sfinfo.format);
 
-        // Calculate length in seconds
+//------------------------------------------------------------------------------
+//	Calculate length in seconds
+//------------------------------------------------------------------------------
         double length_seconds = (double)sfinfo.frames / sfinfo.samplerate;
 
-        // Print file information
+//------------------------------------------------------------------------------
+//	Print file information
+//------------------------------------------------------------------------------
         printf("%-40s %9d Hz %7d-bit %9.2f sec\n",
                entry->d_name,
                sfinfo.samplerate,
@@ -149,7 +179,9 @@ int list_wav_files(int verbose)
 
     closedir(dir);
 
-    // Print summary
+//------------------------------------------------------------------------------
+//	Print summary
+//------------------------------------------------------------------------------
     printf("--------------------------------------------------------------------------------------------\n");
     if (file_count == 0) {
         printf("No WAV files found in current directory.\n");
@@ -161,19 +193,28 @@ int list_wav_files(int verbose)
 }
 
 //------------------------------------------------------------------------------
-// Main application
+//	Main application
+//
+//	This application:
+//	- Lists all WAV files in current directory
+//	- Displays file properties (sample rate, bit depth, duration)
+//	- Shows summary count
+//
+//	Libraries:
+//	- libsndfile: Used for audio file I/O
+//	- libpopt: Used for command-line parsing
 //------------------------------------------------------------------------------
 int main(int argc, const char **argv)
 {
-    /* Command-line options */
+//------------------------------------------------------------------------------
+//	Command-line options
+//------------------------------------------------------------------------------
     int version_flag = 0;
     int verbose = 0;
 
     struct poptOption options[] = {
-        {"version", 'v', POPT_ARG_NONE, &version_flag, 0,
-         "Show version information", NULL},
-        {"verbose", 'V', POPT_ARG_NONE, &verbose, 0,
-         "Verbose output", NULL},
+        {"version",	'v',	POPT_ARG_NONE,	&version_flag,	0,	"Show version information",	NULL	},
+        {"verbose",	'V',	POPT_ARG_NONE,	&verbose,		0,	"Verbose output",			NULL	},
         POPT_AUTOHELP
         POPT_TABLEEND
     };
@@ -195,17 +236,21 @@ int main(int argc, const char **argv)
         return 1;
     }
 
-    /* Handle version mode */
+//------------------------------------------------------------------------------
+//	Handle version mode
+//------------------------------------------------------------------------------
     if (version_flag) {
         printf("ab_list_wav version 1.0.0\n");
         printf("WAV file listing tool for audio-bench\n");
-        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        printf("Copyright (c) 2025 A.C. Verbeck\n");
         poptFreeContext(popt_ctx);
         return 0;
     }
 
     poptFreeContext(popt_ctx);
 
-    /* List WAV files */
+//------------------------------------------------------------------------------
+//	List WAV files
+//------------------------------------------------------------------------------
     return list_wav_files(verbose);
 }
