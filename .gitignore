@@ -67,3 +67,6 @@ pip-log.txt
 docs/_build/
 docs/html/
 docs/latex/
+.cproject
+.project
+/.settings
