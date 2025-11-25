@@ -11,7 +11,10 @@
       "Bash(sox:*)",
       "Bash(./bin/ab_thd_calc:*)",
       "Bash(./bin/ab_thd_calc.exe:*)",
-      "Bash(./ab_thd_calc.exe:*)"
+      "Bash(./ab_thd_calc.exe:*)",
+      "Bash(./bin/ab_wav_fft:*)",
+      "Bash(./bin/ab_wav_fft.exe:*)",
+      "Bash(echo:*)"
     ],
     "deny": [],
     "ask": []

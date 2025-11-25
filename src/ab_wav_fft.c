@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
     int quiet = 0;  // 0 = show diagnostic output, 1 = quiet mode
     int avg_count = 1;  // Number of FFTs to average (default: 1 = no averaging)
     int interval_ms = 0;  // Interval in milliseconds for snapshots (0 = single FFT mode)
+    double offset_sec = 0.0;  // Offset in seconds to skip at the beginning
     int version_flag = 0;
 
     // Define popt options table
@@ -103,6 +104,8 @@ int main(int argc, char *argv[])
             "Number of overlapping FFTs to average (default: 1)", "COUNT"},
         {"interval", 't', POPT_ARG_INT, &interval_ms, 0,
             "Take FFT every N milliseconds (creates multiple files)", "MS"},
+        {"offset", 'O', POPT_ARG_DOUBLE, &offset_sec, 0,
+            "Offset in seconds to skip at the beginning (default: 0.0)", "SECONDS"},
         {"quiet", 'q', POPT_ARG_NONE, &quiet, 0,
             "Quiet mode: suppress diagnostic output", NULL},
         POPT_AUTOHELP
@@ -175,6 +178,20 @@ int main(int argc, char *argv[])
     // Use specified sample rate if provided, otherwise use file's native rate
     int effective_sample_rate = (sample_rate > 0) ? sample_rate : sfinfo.samplerate;
 
+    // Validate offset
+    double file_duration = (double)sfinfo.frames / sfinfo.samplerate;
+    if (offset_sec < 0.0) {
+        fprintf(stderr, "Error: Offset must be non-negative\n");
+        sf_close(infile);
+        return 1;
+    }
+    if (offset_sec >= file_duration) {
+        fprintf(stderr, "Error: Offset (%.2f s) exceeds file duration (%.2f s)\n",
+                offset_sec, file_duration);
+        sf_close(infile);
+        return 1;
+    }
+
     // Determine bit depth and calculate epsilon (noise floor)
     int bit_depth = 0;
     double epsilon = 1e-10;  // Default epsilon
@@ -225,6 +242,9 @@ int main(int argc, char *argv[])
         fprintf(info_out, "Bit depth: %d\n", bit_depth);
         fprintf(info_out, "Frames: %ld\n", (long)sfinfo.frames);
         fprintf(info_out, "Duration: %.2f seconds\n", (double)sfinfo.frames / sfinfo.samplerate);
+        if (offset_sec > 0.0) {
+            fprintf(info_out, "Offset: %.2f seconds\n", offset_sec);
+        }
         fprintf(info_out, "FFT size: %d\n", fft_size);
         if (interval_ms > 0) {
             fprintf(info_out, "Interval mode: FFT every %d ms\n", interval_ms);
@@ -290,8 +310,8 @@ int main(int argc, char *argv[])
     for (int snapshot = 0; snapshot < num_snapshots; snapshot++) {
         int time_ms = snapshot_times_ms[snapshot];
 
-        // Calculate starting frame for this snapshot
-        sf_count_t start_frame = (sf_count_t)((double)time_ms / 1000.0 * sfinfo.samplerate);
+        // Calculate starting frame for this snapshot (including offset)
+        sf_count_t start_frame = (sf_count_t)((offset_sec + (double)time_ms / 1000.0) * sfinfo.samplerate);
 
         // Check if we're past the end of the file
         if (start_frame >= sfinfo.frames) {
