@@ -14,7 +14,11 @@
       "Bash(./ab_thd_calc.exe:*)",
       "Bash(./bin/ab_wav_fft:*)",
       "Bash(./bin/ab_wav_fft.exe:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(./bin/ab_list_dev.exe:*)",
+      "Bash(./bin/ab_acq:*)",
+      "Bash(./bin/ab_audio_analyze:*)",
+      "Bash(gnuplot:*)"
     ],
     "deny": [],
     "ask": []
