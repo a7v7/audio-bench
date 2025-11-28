@@ -53,12 +53,12 @@
 		file_2 = ARG2
 		file_out = ARG3
 		title_string = ARG4
-		t1_title = "trace 1"
-		t2_title = "trace 2"
+		t1_title = ARG5
+		t2_title = ARG6
 		label_x_axis = "Frequency"
 		label_y_axis = "Level (dBFS)"
 	} else {
-		print "usage: <file 1> <file 2> <out> <title>"
+		print "usage: <file 1> <file 2> <out> <title> <trace title 1> <trace title 2>"
 		quit
 	}
 
