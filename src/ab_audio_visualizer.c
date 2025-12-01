@@ -38,7 +38,7 @@
 #define WINDOW_HEIGHT       700
 #define GRAPH_HEIGHT        400
 #define GRAPH_MARGIN        20
-#define DEFAULT_SAMPLE_RATE 44100
+#define DEFAULT_SAMPLE_RATE 48000
 #define FRAMES_PER_BUFFER   512
 #define DEFAULT_TIME_WINDOW 0.5     // seconds
 
@@ -612,7 +612,7 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 
             // Graph area (custom painting)
             g_app.graph_area = CreateWindow("STATIC", "",
-                                           WS_VISIBLE | WS_CHILD | SS_NOTIFY,
+                                           WS_VISIBLE | WS_CHILD | SS_OWNERDRAW,
                                            10, y_pos, WINDOW_WIDTH - 30, GRAPH_HEIGHT,
                                            hwnd, NULL, NULL, NULL);
 
