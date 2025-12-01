@@ -44,6 +44,13 @@ export TEMP=/tmp
 CFLAGS	= -Wall -O2 -std=c11
 LDFLAGS	= -lm -lsndfile -lfftw3 -lpopt -lportaudio
 
+# Windows GUI flags (only add -mwindows on Windows/MSYS2)
+ifeq ($(OS),Windows_NT)
+    GUI_LDFLAGS = $(LDFLAGS) -mwindows -lgdi32 -lcomctl32
+else
+    GUI_LDFLAGS = $(LDFLAGS) -lgdi32 -lcomctl32
+endif
+
 #-------------------------------------------------------------------------------
 #	Directories
 #-------------------------------------------------------------------------------
@@ -58,9 +65,22 @@ VPATH	= src
 	$(MV) $@ $(BIN_DIR)
 
 #-------------------------------------------------------------------------------
-# Main target
+# Main target - includes GUI app only on Windows
 #-------------------------------------------------------------------------------
-all:	$(BIN_DIR) ab_acq ab_audio_analyze ab_freq_response ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft
+ifeq ($(OS),Windows_NT)
+    ALL_TARGETS = ab_acq ab_audio_analyze ab_audio_visualizer ab_freq_response ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft
+else
+    ALL_TARGETS = ab_acq ab_audio_analyze ab_freq_response ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft
+endif
+
+all:	$(BIN_DIR) $(ALL_TARGETS)
+
+#-------------------------------------------------------------------------------
+# Special rule for GUI application (Windows only)
+#-------------------------------------------------------------------------------
+ab_audio_visualizer: src/ab_audio_visualizer.c
+	$(CC) $(CFLAGS) $< $(GUI_LDFLAGS) -o $@
+	$(MV) $@ $(BIN_DIR)
 
 #-------------------------------------------------------------------------------
 # Start of targets

@@ -26,6 +26,7 @@ audio-bench can be used in two distinct ways:
 **Note**: All C programs successfully build with the current Makefile. Python orchestration layer (`generate_report.py`) is partially implemented. Current source files include:
 - `ab_audio_analyze.c` - Basic peak/RMS analysis
 - `ab_acq.c` - Audio acquisition/recording from sound card
+- `ab_audio_visualizer.c` - Real-time audio waveform visualizer (Windows GUI, Stage 1 complete)
 - `ab_freq_response.c` - Frequency response analysis
 - `ab_wav_fft.c` - FFT-based frequency domain analysis with interval snapshot support
 - `ab_gain_calc.c` - Gain calculator for comparing two 1kHz wave files
@@ -82,6 +83,7 @@ See docs/INSTALL.md for complete dependency installation instructions for all pl
    - Available programs (all prefixed with `ab_`):
      - `ab_audio_analyze` - Basic peak/RMS analysis with AudioStats structure
      - `ab_acq` - Audio acquisition/recording from sound card devices
+     - `ab_audio_visualizer` - Real-time waveform visualizer with GUI (Windows only)
      - `ab_freq_response` - Frequency response analysis
      - `ab_wav_fft` - FFT-based frequency domain analysis with interval snapshot support
      - `ab_gain_calc` - Gain calculator for comparing two 1kHz wave files
@@ -186,6 +188,15 @@ python scripts/generate_report.py --input test.wav --output report/ --skip-analy
 ./bin/ab_thd_calc -f test_1khz.wav                    # 1kHz (default)
 ./bin/ab_thd_calc -f test_10khz.wav -F 10000          # 10kHz
 ./bin/ab_thd_calc -f test_1khz.wav -s 16384 -n 15     # Custom FFT size and harmonics
+
+# Real-time audio visualization (Windows only)
+./bin/ab_audio_visualizer.exe
+# Opens GUI window with:
+# - Device selection dropdowns (input/output)
+# - Channel mode selector (Left/Right/Stereo/Combined)
+# - Time window adjustment (0.1-10.0 seconds)
+# - Start/Stop button for audio capture
+# - Real-time waveform display
 ```
 
 ### Creating Graphs
