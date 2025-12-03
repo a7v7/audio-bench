@@ -70,3 +70,4 @@ docs/latex/
 .cproject
 .project
 /.settings
+*.wav

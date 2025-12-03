@@ -19,7 +19,9 @@
       "Bash(./bin/ab_acq:*)",
       "Bash(./bin/ab_audio_analyze:*)",
       "Bash(gnuplot:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(./bin/ab_asio_loopback.exe:*)",
+      "Bash(../bin/ab_asio_loopback.exe:*)"
     ],
     "deny": [],
     "ask": []
