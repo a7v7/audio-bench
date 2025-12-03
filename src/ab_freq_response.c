@@ -38,6 +38,7 @@
 #define DESIRED_SWEEP_DURATION	5.0										//	seconds (will be adjusted to power of 2)
 #define START_FREQ				20.0
 #define END_FREQ				20000.0
+#define SWEEP_LEVEL_DB			-12.0									//	Output level in dB (negative = below 0dBFS)
 
 //------------------------------------------------------------------------------
 // Audio data structure
@@ -91,20 +92,40 @@ static int calculate_power_of_2_length(double desired_duration, int sample_rate)
 //
 //------------------------------------------------------------------------------
 //	Detailed description:
-//	- Generates logarithmic sine sweep
+//	- Generates logarithmic sine sweep (exponential chirp)
 //	- Sweep from f1 to f2 over specified duration
 //	- Uses exponential frequency progression
+//	- Formula: φ(t) = 2π * f1 * L * (exp(t/L) - 1), where L = T/ln(f2/f1)
+//	- Applies fade-in/out to prevent clicks at start/end
 //------------------------------------------------------------------------------
 void generate_log_sweep(float *buffer, int length, float fs, float f1, float f2)
 {
     double duration = (double)length / fs;
-    double k = duration * f1;
     double L = duration / log(f2 / f1);
+
+    // Fade duration: 50ms at start and end (smooth, visible fade)
+    int fade_samples = (int)(0.05 * fs);  // 50ms
+    if (fade_samples > length / 4) fade_samples = length / 4;  // Max 25% of signal
 
     for (int i = 0; i < length; i++) {
         double t = (double)i / fs;
-        double phase = 2.0 * M_PI * k * (exp(t / L) - 1.0);
-        buffer[i] = (float)sin(phase);
+        double phase = 2.0 * M_PI * f1 * L * (exp(t / L) - 1.0);
+        float sample = (float)sin(phase);
+
+        // Apply fade-in (cosine fade from 0 to 1)
+        if (i < fade_samples) {
+            float fade = 0.5f * (1.0f - cosf(M_PI * (float)i / fade_samples));
+            sample *= fade;
+        }
+
+        // Apply fade-out (cosine fade from 1 to 0)
+        if (i >= length - fade_samples) {
+            int fade_idx = i - (length - fade_samples);
+            float fade = 0.5f * (1.0f + cosf(M_PI * (float)fade_idx / fade_samples));
+            sample *= fade;
+        }
+
+        buffer[i] = sample;
     }
 }
 
@@ -375,6 +396,15 @@ int main(int argc, const char **argv)
     printf("Generating %d Hz to %d Hz logarithmic sweep (%.3f seconds)...\n",
            (int)START_FREQ, (int)END_FREQ, actual_duration);
     generate_log_sweep(data.sweep_signal, data.sweep_length, SAMPLE_RATE, START_FREQ, END_FREQ);
+
+//------------------------------------------------------------------------------
+//	Apply output level adjustment (prevent DAC clipping)
+//------------------------------------------------------------------------------
+    float level_linear = powf(10.0f, SWEEP_LEVEL_DB / 20.0f);
+    printf("Applying output level: %.1f dB (gain: %.3f)\n", SWEEP_LEVEL_DB, level_linear);
+    for (int i = 0; i < data.sweep_length; i++) {
+        data.sweep_signal[i] *= level_linear;
+    }
 
 //------------------------------------------------------------------------------
 //	Initialize PortAudio

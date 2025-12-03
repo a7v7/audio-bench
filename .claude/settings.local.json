@@ -18,7 +18,8 @@
       "Bash(./bin/ab_list_dev.exe:*)",
       "Bash(./bin/ab_acq:*)",
       "Bash(./bin/ab_audio_analyze:*)",
-      "Bash(gnuplot:*)"
+      "Bash(gnuplot:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": []
