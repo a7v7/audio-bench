@@ -129,6 +129,10 @@ install:
 	@echo "Installing python scripts to $(INSTALL_DIR)/scripts"
 	mkdir -p $(INSTALL_DIR)/scripts
 	cp scripts/* $(INSTALL_DIR)/scripts
+	@echo "Installing waves to $(INSTALL_DIR)/waves"
+	make -C waves clean all
+	mkdir -p $(INSTALL_DIR)/waves
+	cp waves/*.wav $(INSTALL_DIR)/waves
 	@echo "Installation complete."
 
 #-------------------------------------------------------------------------------

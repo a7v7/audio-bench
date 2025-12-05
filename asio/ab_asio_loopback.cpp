@@ -135,8 +135,13 @@ static void convertASIOToFloat(void* asioBuffer, float* floatBuffer, long numSam
         {
             unsigned char* samples = static_cast<unsigned char*>(asioBuffer);
             for (long i = 0; i < numSamples; i++) {
-                int s24 = (samples[i*3] << 8) | (samples[i*3+1] << 16) | (samples[i*3+2] << 24);
-                floatBuffer[i] = s24 / 2147483648.0f;
+                // Reconstruct 24-bit signed integer from 3 bytes (LSB first)
+                int s24 = samples[i*3] | (samples[i*3+1] << 8) | (samples[i*3+2] << 16);
+                // Sign extend from 24-bit to 32-bit
+                if (s24 & 0x800000) {
+                    s24 |= 0xFF000000;
+                }
+                floatBuffer[i] = s24 / 8388608.0f;  // 2^23
             }
             break;
         }
@@ -200,10 +205,11 @@ static void convertFloatToASIO(float* floatBuffer, void* asioBuffer, long numSam
                 float sample = floatBuffer[i];
                 if (sample > 1.0f) sample = 1.0f;
                 if (sample < -1.0f) sample = -1.0f;
-                int s32 = static_cast<int>(sample * 8388607.0f);
-                samples[i*3] = (s32 >> 8) & 0xFF;
-                samples[i*3+1] = (s32 >> 16) & 0xFF;
-                samples[i*3+2] = (s32 >> 24) & 0xFF;
+                int s24 = static_cast<int>(sample * 8388607.0f);  // 2^23 - 1
+                // Pack as 24-bit LSB (3 bytes, LSB first)
+                samples[i*3] = s24 & 0xFF;
+                samples[i*3+1] = (s24 >> 8) & 0xFF;
+                samples[i*3+2] = (s24 >> 16) & 0xFF;
             }
             break;
         }
@@ -302,13 +308,15 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
                 sf_write_short(outputFile, shortBuffer, samplesToProcess);
                 delete[] shortBuffer;
             } else if (outputBitDepth == 24) {
-                // Convert float to 32-bit integer (libsndfile handles 24-bit packing)
+                // Convert float to 32-bit integer (libsndfile scales to 24-bit internally)
                 int* intBuffer = new int[samplesToProcess];
                 for (long i = 0; i < samplesToProcess; i++) {
+                    // Clamp to [-1.0, 1.0] and convert to full 32-bit range
+                    // libsndfile will scale this down to 24-bit when writing
                     float sample = tempInBuffer[i];
                     if (sample > 1.0f) sample = 1.0f;
                     if (sample < -1.0f) sample = -1.0f;
-                    intBuffer[i] = static_cast<int>(sample * 8388607.0f);  // 2^23 - 1
+                    intBuffer[i] = static_cast<int>(sample * 2147483647.0f);  // 2^31 - 1
                 }
                 sf_write_int(outputFile, intBuffer, samplesToProcess);
                 delete[] intBuffer;
@@ -622,6 +630,7 @@ int main(int argc, const char **argv)
 //------------------------------------------------------------------------------
     int version_flag = 0;
     int list_flag = 0;
+    int about_flag = 0;
     char* driverName = nullptr;
     char* inputFilename = nullptr;
     char* outputFilename = nullptr;
@@ -632,11 +641,12 @@ int main(int argc, const char **argv)
 
     struct poptOption options[] = {
         {"version", 'v', POPT_ARG_NONE, &version_flag, 0, "Show version information", nullptr},
+        {"about", 'a', POPT_ARG_NONE, &about_flag, 0, "Show about information", nullptr},
         {"list", 'l', POPT_ARG_NONE, &list_flag, 0, "List available ASIO drivers", nullptr},
         {"driver", 'd', POPT_ARG_STRING, &driverName, 0, "ASIO driver name", "NAME"},
-        {"input", 'i', POPT_ARG_STRING, &inputFilename, 0, "Input WAV file to play", "FILE"},
-        {"output", 'o', POPT_ARG_STRING, &outputFilename, 0, "Output WAV file to record", "FILE"},
-        {"channel", 'c', POPT_ARG_LONG, &inputChannel, 0, "Input channel (default: 0)", "N"},
+        {"play", 'p', POPT_ARG_STRING, &inputFilename, 0, "Input WAV file to play", "FILE"},
+        {"capture", 'o', POPT_ARG_STRING, &outputFilename, 0, "Output WAV file to record", "FILE"},
+        {"inchan", 'i', POPT_ARG_LONG, &inputChannel, 0, "Input channel (default: 0)", "N"},
         {"outchan", 'C', POPT_ARG_LONG, &outputChannel, 0, "Output channel (default: 0)", "N"},
         {"rate", 'r', POPT_ARG_DOUBLE, &requestedSampleRate, 0, "Sample rate (default: use input file rate)", "HZ"},
         {"bits", 'b', POPT_ARG_LONG, &bitDepth, 0, "Output bit depth: 16, 24, or 32 (default: 32)", "BITS"},
@@ -651,10 +661,11 @@ int main(int argc, const char **argv)
         "This tool plays a mono WAV file through an ASIO output channel while\n"
         "simultaneously recording from an ASIO input channel to a new WAV file.\n\n"
         "Examples:\n"
-        "  ab_asio_loopback --list                                    # List ASIO drivers\n"
-        "  ab_asio_loopback -d \"Driver\" -i in.wav -o out.wav        # Basic loopback\n"
-        "  ab_asio_loopback -d \"Driver\" -i in.wav -o out.wav -c 0 -C 1  # Specify channels\n"
-        "  ab_asio_loopback -d \"Driver\" -i in.wav -o out.wav -r 96000 -b 24  # Custom rate and bits\n");
+        "  ab_asio_loopback --list                                      # List ASIO drivers\n"
+        "  ab_asio_loopback --about                                     # Show about information\n"
+        "  ab_asio_loopback -d \"Driver\" -p in.wav -o out.wav          # Basic loopback\n"
+        "  ab_asio_loopback -d \"Driver\" -p in.wav -o out.wav -i 0 -C 1  # Specify channels\n"
+        "  ab_asio_loopback -d \"Driver\" -p in.wav -o out.wav -r 96000 -b 24  # Custom rate and bits\n");
 
     int rc = poptGetNextOpt(popt_ctx);
     if (rc < -1) {
@@ -673,6 +684,32 @@ int main(int argc, const char **argv)
         printf("ab_asio_loopback version 1.0.0\n");
         printf("ASIO Audio Loopback Tool for audio-bench\n");
         printf("Copyright (c) 2025 Anthony Verbeck\n");
+        printf("Built: %s %s\n", __DATE__, __TIME__);
+        poptFreeContext(popt_ctx);
+        CoUninitialize();
+        return 0;
+    }
+
+//------------------------------------------------------------------------------
+//  Handle about mode
+//------------------------------------------------------------------------------
+    if (about_flag) {
+        printf("ab_asio_loopback - ASIO Audio Loopback Tool\n");
+        printf("============================================\n\n");
+        printf("Part of the audio-bench suite\n");
+        printf("Version: 1.0.0\n");
+        printf("Copyright (c) 2025 Anthony Verbeck\n");
+        printf("License: MIT\n\n");
+        printf("Description:\n");
+        printf("  This tool plays a mono WAV file through an ASIO output channel while\n");
+        printf("  simultaneously recording from an ASIO input channel to a new WAV file.\n");
+        printf("  Designed for professional audio interfaces using the ASIO protocol.\n\n");
+        printf("Features:\n");
+        printf("  - Direct ASIO driver access for low-latency audio\n");
+        printf("  - Simultaneous playback and recording\n");
+        printf("  - Support for 16-bit, 24-bit, and 32-bit float formats\n");
+        printf("  - Configurable sample rates and channel selection\n\n");
+        printf("Platform: Windows only (ASIO SDK)\n");
         printf("Built: %s %s\n", __DATE__, __TIME__);
         poptFreeContext(popt_ctx);
         CoUninitialize();
@@ -700,14 +737,14 @@ int main(int argc, const char **argv)
     }
 
     if (!inputFilename) {
-        fprintf(stderr, "Error: Input WAV file is required (use --input)\n");
+        fprintf(stderr, "Error: Input WAV file is required (use --play)\n");
         poptFreeContext(popt_ctx);
         CoUninitialize();
         return 1;
     }
 
     if (!outputFilename) {
-        fprintf(stderr, "Error: Output WAV file is required (use --output)\n");
+        fprintf(stderr, "Error: Output WAV file is required (use --capture)\n");
         poptFreeContext(popt_ctx);
         CoUninitialize();
         return 1;

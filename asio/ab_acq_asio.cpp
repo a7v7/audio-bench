@@ -116,8 +116,13 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
             {
                 unsigned char* samples = (unsigned char*)buffer;
                 for (long i = 0; i < samplesToWrite; i++) {
-                    int s24 = (samples[i*3] << 8) | (samples[i*3+1] << 16) | (samples[i*3+2] << 24);
-                    floatBuffer[i] = s24 / 2147483648.0f;
+                    // Reconstruct 24-bit signed integer from 3 bytes (LSB first)
+                    int s24 = samples[i*3] | (samples[i*3+1] << 8) | (samples[i*3+2] << 16);
+                    // Sign extend from 24-bit to 32-bit
+                    if (s24 & 0x800000) {
+                        s24 |= 0xFF000000;
+                    }
+                    floatBuffer[i] = s24 / 8388608.0f;  // 2^23
                 }
                 break;
             }
@@ -163,14 +168,15 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
             sf_write_short(outputFile, shortBuffer, samplesToWrite);
             delete[] shortBuffer;
         } else if (outputBitDepth == 24) {
-            // Convert float to 32-bit integer (libsndfile handles 24-bit packing)
+            // Convert float to 32-bit integer (libsndfile scales to 24-bit internally)
             int* intBuffer = new int[samplesToWrite];
             for (long i = 0; i < samplesToWrite; i++) {
-                // Clamp to [-1.0, 1.0] and convert to 24-bit (stored in 32-bit int)
+                // Clamp to [-1.0, 1.0] and convert to full 32-bit range
+                // libsndfile will scale this down to 24-bit when writing
                 float sample = floatBuffer[i];
                 if (sample > 1.0f) sample = 1.0f;
                 if (sample < -1.0f) sample = -1.0f;
-                intBuffer[i] = (int)(sample * 8388607.0f);  // 2^23 - 1
+                intBuffer[i] = (int)(sample * 2147483647.0f);  // 2^31 - 1
             }
             sf_write_int(outputFile, intBuffer, samplesToWrite);
             delete[] intBuffer;
@@ -445,6 +451,7 @@ int main(int argc, const char** argv)
         printf("ab_acq_asio version 1.0.0\n");
         printf("ASIO Audio Acquisition Tool for audio-bench\n");
         printf("Copyright (c) 2025 Anthony Verbeck\n");
+        printf("Built: %s %s\n", __DATE__, __TIME__);
         poptFreeContext(popt_ctx);
         CoUninitialize();
         return 0;

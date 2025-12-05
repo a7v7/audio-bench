@@ -21,7 +21,8 @@
       "Bash(gnuplot:*)",
       "Bash(mkdir:*)",
       "Bash(./bin/ab_asio_loopback.exe:*)",
-      "Bash(../bin/ab_asio_loopback.exe:*)"
+      "Bash(../bin/ab_asio_loopback.exe:*)",
+      "Bash(./bin/ab_acq_asio.exe:*)"
     ],
     "deny": [],
     "ask": []
