@@ -295,34 +295,8 @@ static ASIOTime* bufferSwitchTimeInfo(ASIOTime* timeInfo, long index, ASIOBool p
     if (audioData.current_frame <= audioData.total_frames && audioData.current_frame > 0) {
         long copyFrame = audioData.current_frame - samplesToProcess;
         if (copyFrame >= 0 && copyFrame + samplesToProcess <= audioData.total_frames) {
-            // Write to output file based on bit depth
-            if (outputBitDepth == 16) {
-                // Convert float to 16-bit signed integer
-                short* shortBuffer = new short[samplesToProcess];
-                for (long i = 0; i < samplesToProcess; i++) {
-                    float sample = tempInBuffer[i];
-                    if (sample > 1.0f) sample = 1.0f;
-                    if (sample < -1.0f) sample = -1.0f;
-                    shortBuffer[i] = static_cast<short>(sample * 32767.0f);
-                }
-                sf_write_short(outputFile, shortBuffer, samplesToProcess);
-                delete[] shortBuffer;
-            } else if (outputBitDepth == 24) {
-                // Convert float to 32-bit integer (libsndfile scales to 24-bit internally)
-                int* intBuffer = new int[samplesToProcess];
-                for (long i = 0; i < samplesToProcess; i++) {
-                    // Clamp to [-1.0, 1.0] and convert to full 32-bit range
-                    // libsndfile will scale this down to 24-bit when writing
-                    float sample = tempInBuffer[i];
-                    if (sample > 1.0f) sample = 1.0f;
-                    if (sample < -1.0f) sample = -1.0f;
-                    intBuffer[i] = static_cast<int>(sample * 2147483647.0f);  // 2^31 - 1
-                }
-                sf_write_int(outputFile, intBuffer, samplesToProcess);
-                delete[] intBuffer;
-            } else {  // 32-bit float
-                sf_write_float(outputFile, tempInBuffer, samplesToProcess);
-            }
+            // Write to output file - libsndfile handles conversion to target bit depth
+            sf_write_float(outputFile, tempInBuffer, samplesToProcess);
         }
     }
 
