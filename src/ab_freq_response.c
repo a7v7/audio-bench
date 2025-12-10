@@ -23,467 +23,367 @@
 //------------------------------------------------------------------------------
 #include <stdio.h>
 #include <stdlib.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
 #include <string.h>
-#include <portaudio.h>
+#include <math.h>
+#include <complex.h>
+#include <sndfile.h>
 #include <fftw3.h>
-#include <popt.h>
 
-//------------------------------------------------------------------------------
-// Configuration parameters
-//------------------------------------------------------------------------------
-#define SAMPLE_RATE				48000
-#define FRAMES_PER_BUFFER		512
-#define DESIRED_SWEEP_DURATION	5.0										//	seconds (will be adjusted to power of 2)
-#define START_FREQ				20.0
-#define END_FREQ				20000.0
-#define SWEEP_LEVEL_DB			-12.0									//	Output level in dB (negative = below 0dBFS)
+#define MIN_MAG_DB -120.0
 
-//------------------------------------------------------------------------------
-// Audio data structure
-//------------------------------------------------------------------------------
 typedef struct {
-    float *sweep_signal;											//	Generated sweep signal
-    float *recorded_signal;											//	Recorded response
-    int sweep_length;												//	Length of sweep in samples
-    int current_frame;												//	Current playback position
-    int is_recording;												//	Recording active flag
-} AudioData;
+    double *data;
+    size_t length;
+    int sample_rate;
+    int channels;
+} AudioBuffer;
 
-//------------------------------------------------------------------------------
-//	Name:		calculate_power_of_2_length
-//
-//	Returns:	Power of 2 length closest to desired duration
-//
-//------------------------------------------------------------------------------
-//	Detailed description:
-//	- Calculates sweep length that is power of 2
-//	- Finds nearest power of 2 to desired duration
-//	- Ensures efficient FFT processing
-//------------------------------------------------------------------------------
-static int calculate_power_of_2_length(double desired_duration, int sample_rate)
-{
-    int desired_samples = (int)(desired_duration * sample_rate);
-
-//------------------------------------------------------------------------------
-//	Find nearest power of 2
-//------------------------------------------------------------------------------
-    int power = 1;
-    while (power < desired_samples) {
-        power *= 2;
+// Load audio file into buffer
+int load_audio_file(const char *filename, AudioBuffer *buf) {
+    SF_INFO sf_info;
+    memset(&sf_info, 0, sizeof(SF_INFO));
+    
+    SNDFILE *sf = sf_open(filename, SFM_READ, &sf_info);
+    if (!sf) {
+        fprintf(stderr, "Error opening %s: %s\n", filename, sf_strerror(NULL));
+        return -1;
     }
-
-//------------------------------------------------------------------------------
-//	Check if previous power of 2 is closer
-//------------------------------------------------------------------------------
-    int prev_power = power / 2;
-    if (abs(desired_samples - prev_power) < abs(desired_samples - power)) {
-        power = prev_power;
+    
+    buf->length = sf_info.frames;
+    buf->sample_rate = sf_info.samplerate;
+    buf->channels = sf_info.channels;
+    
+    // Allocate buffer for mono (we'll mix down if stereo)
+    buf->data = (double *)malloc(buf->length * sizeof(double));
+    if (!buf->data) {
+        fprintf(stderr, "Memory allocation failed\n");
+        sf_close(sf);
+        return -1;
     }
-
-    return power;
-}
-
-//------------------------------------------------------------------------------
-//	Name:		generate_log_sweep
-//
-//	Returns:	none
-//
-//------------------------------------------------------------------------------
-//	Detailed description:
-//	- Generates logarithmic sine sweep (exponential chirp)
-//	- Sweep from f1 to f2 over specified duration
-//	- Uses exponential frequency progression
-//	- Formula: φ(t) = 2π * f1 * L * (exp(t/L) - 1), where L = T/ln(f2/f1)
-//	- Applies fade-in/out to prevent clicks at start/end
-//------------------------------------------------------------------------------
-void generate_log_sweep(float *buffer, int length, float fs, float f1, float f2)
-{
-    double duration = (double)length / fs;
-    double L = duration / log(f2 / f1);
-
-    // Fade duration: 50ms at start and end (smooth, visible fade)
-    int fade_samples = (int)(0.05 * fs);  // 50ms
-    if (fade_samples > length / 4) fade_samples = length / 4;  // Max 25% of signal
-
-    for (int i = 0; i < length; i++) {
-        double t = (double)i / fs;
-        double phase = 2.0 * M_PI * f1 * L * (exp(t / L) - 1.0);
-        float sample = (float)sin(phase);
-
-        // Apply fade-in (cosine fade from 0 to 1)
-        if (i < fade_samples) {
-            float fade = 0.5f * (1.0f - cosf(M_PI * (float)i / fade_samples));
-            sample *= fade;
-        }
-
-        // Apply fade-out (cosine fade from 1 to 0)
-        if (i >= length - fade_samples) {
-            int fade_idx = i - (length - fade_samples);
-            float fade = 0.5f * (1.0f + cosf(M_PI * (float)fade_idx / fade_samples));
-            sample *= fade;
-        }
-
-        buffer[i] = sample;
-    }
-}
-
-//------------------------------------------------------------------------------
-//	Name:		audioCallback
-//
-//	Returns:	PaStreamCallbackResult
-//
-//------------------------------------------------------------------------------
-//	Detailed description:
-//	- PortAudio callback function
-//	- Plays sweep signal through output
-//	- Records input signal simultaneously
-//	- Returns paComplete when sweep finishes
-//------------------------------------------------------------------------------
-static int audioCallback(const void *inputBuffer, void *outputBuffer,
-                        unsigned long framesPerBuffer,
-                        const PaStreamCallbackTimeInfo* timeInfo,
-                        PaStreamCallbackFlags statusFlags,
-                        void *userData)
-{
-    AudioData *data = (AudioData*)userData;
-    float *out = (float*)outputBuffer;
-    const float *in = (const float*)inputBuffer;
-
-    (void) timeInfo;													//	Unused
-    (void) statusFlags;													//	Unused
-
-    for (unsigned long i = 0; i < framesPerBuffer; i++) {
-//------------------------------------------------------------------------------
-//	Play sweep signal
-//------------------------------------------------------------------------------
-        if (data->current_frame < data->sweep_length) {
-            *out++ = data->sweep_signal[data->current_frame];
-
-//------------------------------------------------------------------------------
-//	Record input signal
-//------------------------------------------------------------------------------
-            if (in) {
-                data->recorded_signal[data->current_frame] = *in++;
+    
+    if (sf_info.channels == 1) {
+        // Mono - read directly
+        sf_read_double(sf, buf->data, buf->length);
+    } else {
+        // Multi-channel - mix to mono
+        double *temp = (double *)malloc(buf->length * sf_info.channels * sizeof(double));
+        sf_read_double(sf, temp, buf->length * sf_info.channels);
+        
+        for (size_t i = 0; i < buf->length; i++) {
+            buf->data[i] = 0.0;
+            for (int ch = 0; ch < sf_info.channels; ch++) {
+                buf->data[i] += temp[i * sf_info.channels + ch];
             }
+            buf->data[i] /= sf_info.channels;
+        }
+        free(temp);
+    }
+    
+    sf_close(sf);
+    printf("Loaded %s: %zu samples, %d Hz, %d channel(s)\n", 
+           filename, buf->length, buf->sample_rate, sf_info.channels);
+    
+    return 0;
+}
 
-            data->current_frame++;
+// Free audio buffer
+void free_audio_buffer(AudioBuffer *buf) {
+    if (buf->data) {
+        free(buf->data);
+        buf->data = NULL;
+    }
+}
+
+// Calculate RMS level of a signal
+double calculate_rms(double *data, size_t length) {
+    double sum_sq = 0.0;
+    for (size_t i = 0; i < length; i++) {
+        sum_sq += data[i] * data[i];
+    }
+    return sqrt(sum_sq / length);
+}
+
+// Compute frequency response via deconvolution: H(f) = Y(f) / X(f)
+int compute_frequency_response(AudioBuffer *reference, AudioBuffer *recorded,
+                               double **freq_axis, double **magnitude_db, 
+                               double **phase_deg, size_t *num_bins,
+                               int normalize_levels) {
+    
+    // Verify compatibility
+    if (reference->sample_rate != recorded->sample_rate) {
+        fprintf(stderr, "Sample rate mismatch: ref=%d, rec=%d\n",
+                reference->sample_rate, recorded->sample_rate);
+        return -1;
+    }
+    
+    // Calculate and report RMS levels
+    double ref_rms = calculate_rms(reference->data, reference->length);
+    double rec_rms = calculate_rms(recorded->data, recorded->length);
+    
+    double ref_db = 20.0 * log10(ref_rms);
+    double rec_db = 20.0 * log10(rec_rms);
+    double level_diff = rec_db - ref_db;
+    
+    printf("\n=== Signal Levels ===\n");
+    printf("Reference RMS: %.6f (%.2f dBFS)\n", ref_rms, ref_db);
+    printf("Recorded RMS:  %.6f (%.2f dBFS)\n", rec_rms, rec_db);
+    printf("Level difference: %.2f dB\n", level_diff);
+    
+    if (normalize_levels) {
+        // Normalize recorded signal to match reference level
+        double gain_factor = ref_rms / rec_rms;
+        printf("Applying gain compensation: %.2f dB\n", 20.0 * log10(gain_factor));
+        for (size_t i = 0; i < recorded->length; i++) {
+            recorded->data[i] *= gain_factor;
+        }
+    } else {
+        printf("No gain compensation applied (frequency response includes %.2f dB offset)\n", level_diff);
+    }
+    
+    // Use the longer length and zero-pad both to same size
+    size_t fft_size = (reference->length > recorded->length) ? 
+                      reference->length : recorded->length;
+    
+    // Make FFT size a power of 2 for efficiency
+    size_t fft_size_pow2 = 1;
+    while (fft_size_pow2 < fft_size) {
+        fft_size_pow2 <<= 1;
+    }
+    fft_size = fft_size_pow2;
+    
+    printf("FFT size: %zu\n", fft_size);
+    
+    // Allocate padded buffers
+    double *ref_padded = (double *)fftw_malloc(fft_size * sizeof(double));
+    double *rec_padded = (double *)fftw_malloc(fft_size * sizeof(double));
+    fftw_complex *ref_fft = (fftw_complex *)fftw_malloc((fft_size/2 + 1) * sizeof(fftw_complex));
+    fftw_complex *rec_fft = (fftw_complex *)fftw_malloc((fft_size/2 + 1) * sizeof(fftw_complex));
+    
+    if (!ref_padded || !rec_padded || !ref_fft || !rec_fft) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return -1;
+    }
+    
+    // Copy and zero-pad
+    memcpy(ref_padded, reference->data, reference->length * sizeof(double));
+    memset(ref_padded + reference->length, 0, (fft_size - reference->length) * sizeof(double));
+    
+    memcpy(rec_padded, recorded->data, recorded->length * sizeof(double));
+    memset(rec_padded + recorded->length, 0, (fft_size - recorded->length) * sizeof(double));
+    
+    // Create FFT plans
+    fftw_plan ref_plan = fftw_plan_dft_r2c_1d(fft_size, ref_padded, ref_fft, FFTW_ESTIMATE);
+    fftw_plan rec_plan = fftw_plan_dft_r2c_1d(fft_size, rec_padded, rec_fft, FFTW_ESTIMATE);
+    
+    // Execute FFTs
+    printf("Computing FFTs...\n");
+    fftw_execute(ref_plan);
+    fftw_execute(rec_plan);
+    
+    // Compute frequency response H(f) = Y(f) / X(f)
+    *num_bins = fft_size / 2 + 1;
+    *freq_axis = (double *)malloc(*num_bins * sizeof(double));
+    *magnitude_db = (double *)malloc(*num_bins * sizeof(double));
+    *phase_deg = (double *)malloc(*num_bins * sizeof(double));
+    
+    if (!*freq_axis || !*magnitude_db || !*phase_deg) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return -1;
+    }
+    
+    double freq_resolution = (double)reference->sample_rate / fft_size;
+    
+    printf("Computing frequency response...\n");
+    for (size_t i = 0; i < *num_bins; i++) {
+        (*freq_axis)[i] = i * freq_resolution;
+        
+        // Get complex values
+        double complex X = ref_fft[i][0] + I * ref_fft[i][1];
+        double complex Y = rec_fft[i][0] + I * rec_fft[i][1];
+        
+        // Compute H = Y / X with regularization to avoid division by near-zero
+        double X_mag = cabs(X);
+        double regularization = 1e-10 * cabs(rec_fft[0][0]); // Small fraction of DC
+        
+        double complex H;
+        if (X_mag > regularization) {
+            H = Y / X;
         } else {
-            *out++ = 0.0f;
-            if (in) in++;
+            // Below noise floor - use zero response
+            H = 0.0;
         }
+        
+        // Magnitude in dB
+        double mag = cabs(H);
+        if (mag > 0.0) {
+            (*magnitude_db)[i] = 20.0 * log10(mag);
+        } else {
+            (*magnitude_db)[i] = MIN_MAG_DB;
+        }
+        
+        // Limit minimum magnitude
+        if ((*magnitude_db)[i] < MIN_MAG_DB) {
+            (*magnitude_db)[i] = MIN_MAG_DB;
+        }
+        
+        // Phase in degrees
+        (*phase_deg)[i] = carg(H) * 180.0 / M_PI;
     }
-
-    if (data->current_frame >= data->sweep_length) {
-        return paComplete;
-    }
-
-    return paContinue;
+    
+    // Cleanup
+    fftw_destroy_plan(ref_plan);
+    fftw_destroy_plan(rec_plan);
+    fftw_free(ref_padded);
+    fftw_free(rec_padded);
+    fftw_free(ref_fft);
+    fftw_free(rec_fft);
+    
+    return 0;
 }
 
-//------------------------------------------------------------------------------
-//	Name:		calculate_frequency_response
-//
-//	Returns:	none
-//
-//------------------------------------------------------------------------------
-//	Detailed description:
-//	- Calculates frequency response using FFT
-//	- Compares recorded signal to sweep signal
-//	- Outputs magnitude and phase response to CSV file
-//	- Frequency range limited to START_FREQ to END_FREQ
-//------------------------------------------------------------------------------
-void calculate_frequency_response(float *input_signal, float *output_signal,
-                                  int length, double sample_rate)
-{
-    int fft_size = length;
-
-//------------------------------------------------------------------------------
-//	Allocate FFTW arrays
-//------------------------------------------------------------------------------
-    double *in_sweep = fftw_malloc(sizeof(double) * fft_size);
-    double *in_recorded = fftw_malloc(sizeof(double) * fft_size);
-    fftw_complex *out_sweep = fftw_malloc(sizeof(fftw_complex) * (fft_size/2 + 1));
-    fftw_complex *out_recorded = fftw_malloc(sizeof(fftw_complex) * (fft_size/2 + 1));
-
-//------------------------------------------------------------------------------
-//	Create FFTW plans
-//------------------------------------------------------------------------------
-    fftw_plan plan_sweep = fftw_plan_dft_r2c_1d(fft_size, in_sweep, out_sweep, FFTW_ESTIMATE);
-    fftw_plan plan_recorded = fftw_plan_dft_r2c_1d(fft_size, in_recorded, out_recorded, FFTW_ESTIMATE);
-
-//------------------------------------------------------------------------------
-//	Copy input data
-//------------------------------------------------------------------------------
-    for (int i = 0; i < length; i++) {
-        in_sweep[i] = (double)input_signal[i];
-        in_recorded[i] = (double)output_signal[i];
+// Write results to CSV file
+int write_csv(const char *filename, double *freq, double *mag_db, 
+              double *phase_deg, size_t num_bins) {
+    FILE *fp = fopen(filename, "w");
+    if (!fp) {
+        fprintf(stderr, "Error opening output file: %s\n", filename);
+        return -1;
     }
-
-//------------------------------------------------------------------------------
-//	Zero pad if necessary
-//------------------------------------------------------------------------------
-    for (int i = length; i < fft_size; i++) {
-        in_sweep[i] = 0.0;
-        in_recorded[i] = 0.0;
+    
+    fprintf(fp, "Frequency_Hz,Magnitude_dB,Phase_deg\n");
+    for (size_t i = 0; i < num_bins; i++) {
+        fprintf(fp, "%.6f,%.6f,%.6f\n", freq[i], mag_db[i], phase_deg[i]);
     }
-
-//------------------------------------------------------------------------------
-//	Execute FFTs
-//------------------------------------------------------------------------------
-    fftw_execute(plan_sweep);
-    fftw_execute(plan_recorded);
-
-//------------------------------------------------------------------------------
-//	Calculate frequency response and write to CSV file
-//------------------------------------------------------------------------------
-    FILE *fp = fopen("frequency_response.csv", "w");
-    if (fp) {
-        fprintf(fp, "Frequency (Hz),Magnitude (dB),Phase (degrees)\n");
-
-        for (int i = 1; i < fft_size/2 + 1; i++) {
-            double freq = (double)i * sample_rate / fft_size;
-
-//------------------------------------------------------------------------------
-//	Skip DC and frequencies outside our range
-//------------------------------------------------------------------------------
-            if (freq < START_FREQ || freq > END_FREQ) continue;
-
-//------------------------------------------------------------------------------
-//	Calculate complex division: recorded / sweep
-//------------------------------------------------------------------------------
-            double sweep_real = out_sweep[i][0];
-            double sweep_imag = out_sweep[i][1];
-            double rec_real = out_recorded[i][0];
-            double rec_imag = out_recorded[i][1];
-
-            double sweep_mag_sq = sweep_real * sweep_real + sweep_imag * sweep_imag;
-
-            if (sweep_mag_sq > 1e-10) {									//	Avoid division by zero
-//------------------------------------------------------------------------------
-//	Complex division
-//------------------------------------------------------------------------------
-                double h_real = (rec_real * sweep_real + rec_imag * sweep_imag) / sweep_mag_sq;
-                double h_imag = (rec_imag * sweep_real - rec_real * sweep_imag) / sweep_mag_sq;
-
-//------------------------------------------------------------------------------
-//	Magnitude in dB
-//------------------------------------------------------------------------------
-                double magnitude = sqrt(h_real * h_real + h_imag * h_imag);
-                double magnitude_db = 20.0 * log10(magnitude + 1e-10);
-
-//------------------------------------------------------------------------------
-//	Phase in degrees
-//------------------------------------------------------------------------------
-                double phase = atan2(h_imag, h_real) * 180.0 / M_PI;
-
-                fprintf(fp, "%.2f,%.2f,%.2f\n", freq, magnitude_db, phase);
-            }
-        }
-
-        fclose(fp);
-        printf("Frequency response saved to frequency_response.csv\n");
-    }
-
-//------------------------------------------------------------------------------
-//	Cleanup
-//------------------------------------------------------------------------------
-    fftw_destroy_plan(plan_sweep);
-    fftw_destroy_plan(plan_recorded);
-    fftw_free(in_sweep);
-    fftw_free(in_recorded);
-    fftw_free(out_sweep);
-    fftw_free(out_recorded);
+    
+    fclose(fp);
+    printf("Results written to %s\n", filename);
+    return 0;
 }
 
-//------------------------------------------------------------------------------
-//	Main application
-//
-//	This application:
-//	- Generates logarithmic sine sweep
-//	- Plays sweep through audio output
-//	- Records audio input
-//	- Calculates frequency response
-//	- Saves results to CSV file
-//
-//	Libraries:
-//	- PortAudio: Audio playback and recording
-//	- FFTW3: FFT calculations
-//	- libpopt: Command-line parsing
-//------------------------------------------------------------------------------
-int main(int argc, const char **argv)
-{
-//------------------------------------------------------------------------------
-//	Command-line options
-//------------------------------------------------------------------------------
-    int version_flag = 0;
+// Print summary statistics
+void print_summary(double *freq, double *mag_db, size_t num_bins, int sample_rate) {
+    // Find passband (20 Hz - 20 kHz)
+    size_t start_idx = 0, end_idx = num_bins - 1;
+    for (size_t i = 0; i < num_bins; i++) {
+        if (freq[i] >= 20.0 && start_idx == 0) start_idx = i;
+        if (freq[i] <= 20000.0) end_idx = i;
+    }
+    
+    // Find min/max/avg in passband
+    double min_db = mag_db[start_idx];
+    double max_db = mag_db[start_idx];
+    double sum_db = 0.0;
+    size_t count = 0;
+    
+    for (size_t i = start_idx; i <= end_idx; i++) {
+        if (mag_db[i] > MIN_MAG_DB + 10) { // Ignore noise floor
+            if (mag_db[i] < min_db) min_db = mag_db[i];
+            if (mag_db[i] > max_db) max_db = mag_db[i];
+            sum_db += mag_db[i];
+            count++;
+        }
+    }
+    
+    double avg_db = (count > 0) ? sum_db / count : 0.0;
+    
+    printf("\n=== Frequency Response Summary (20 Hz - 20 kHz) ===\n");
+    printf("Average level: %.2f dB\n", avg_db);
+    printf("Peak level: %.2f dB at ", max_db);
+    for (size_t i = start_idx; i <= end_idx; i++) {
+        if (fabs(mag_db[i] - max_db) < 0.01) {
+            printf("%.1f Hz ", freq[i]);
+            break;
+        }
+    }
+    printf("\n");
+    printf("Minimum level: %.2f dB\n", min_db);
+    printf("Variation: %.2f dB\n", max_db - min_db);
+    printf("Frequency resolution: %.2f Hz\n", freq[1] - freq[0]);
+}
 
-    struct poptOption options[] = {
-        {"version", 'v', POPT_ARG_NONE, &version_flag, 0, "Show version information", NULL},
-        POPT_AUTOHELP
-        POPT_TABLEEND
-    };
+void print_usage(const char *prog_name) {
+    printf("Usage: %s <reference.wav> <recorded.wav> [output.csv] [--no-normalize]\n\n", prog_name);
+    printf("Measures frequency response by deconvolving recorded signal with reference.\n");
+    printf("  reference.wav - Original stimulus signal\n");
+    printf("  recorded.wav  - Recorded response (after passing through system)\n");
+    printf("  output.csv    - Output file (default: freq_response.csv)\n");
+    printf("  --no-normalize - Don't compensate for level differences (default: auto-compensate)\n\n");
+    printf("By default, the program compensates for any level difference between reference\n");
+    printf("and recorded signals, making the frequency response show only the frequency-\n");
+    printf("dependent characteristics. Use --no-normalize to see the absolute gain/loss.\n");
+}
 
-    poptContext popt_ctx = poptGetContext(NULL, argc, argv, options, 0);
-    poptSetOtherOptionHelp(popt_ctx,
-        "[OPTIONS]\n\n"
-        "Frequency Response Measurement Tool for audio-bench.\n\n"
-        "This tool generates a logarithmic sine sweep, plays it through\n"
-        "the audio interface, records the response, and calculates the\n"
-        "frequency response.\n\n"
-        "Example:\n"
-        "  ab_freq_response           # Run frequency response measurement\n");
-
-    int rc = poptGetNextOpt(popt_ctx);
-    if (rc < -1) {
-        fprintf(stderr, "Error: %s: %s\n",
-                poptBadOption(popt_ctx, POPT_BADOPTION_NOALIAS),
-                poptStrerror(rc));
-        poptFreeContext(popt_ctx);
+int main(int argc, char *argv[]) {
+    if (argc < 3) {
+        print_usage(argv[0]);
         return 1;
     }
-
-//------------------------------------------------------------------------------
-//	Handle version mode
-//------------------------------------------------------------------------------
-    if (version_flag) {
-        printf("ab_freq_response version 1.0.0\n");
-        printf("Frequency Response Measurement Tool for audio-bench\n");
-        printf("Copyright (c) 2025 A.C. Verbeck\n");
-        poptFreeContext(popt_ctx);
-        return 0;
+    
+    const char *ref_filename = argv[1];
+    const char *rec_filename = argv[2];
+    const char *out_filename = "freq_response.csv";
+    int normalize_levels = 1; // Default: normalize levels
+    
+    // Parse remaining arguments
+    for (int i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "--no-normalize") == 0) {
+            normalize_levels = 0;
+        } else {
+            // Assume it's the output filename
+            out_filename = argv[i];
+        }
     }
-
-    poptFreeContext(popt_ctx);
-
-    PaError err;
-    PaStream *stream;
-    AudioData data;
-
-    printf("Frequency Response Measurement Tool\n");
-    printf("====================================\n\n");
-
-//------------------------------------------------------------------------------
-//	Calculate power-of-2 sweep length
-//------------------------------------------------------------------------------
-    data.sweep_length = calculate_power_of_2_length(DESIRED_SWEEP_DURATION, SAMPLE_RATE);
-    double actual_duration = (double)data.sweep_length / SAMPLE_RATE;
-
-    data.current_frame = 0;
-    data.is_recording = 1;
-
-    printf("Sweep length: %d samples (power of 2: 2^%d)\n",
-           data.sweep_length, (int)log2(data.sweep_length));
-    printf("Actual duration: %.3f seconds\n", actual_duration);
-    printf("FFT frequency resolution: %.3f Hz\n\n",
-           (double)SAMPLE_RATE / data.sweep_length);
-
-//------------------------------------------------------------------------------
-//	Allocate buffers
-//------------------------------------------------------------------------------
-    data.sweep_signal = (float*)malloc(data.sweep_length * sizeof(float));
-    data.recorded_signal = (float*)calloc(data.sweep_length, sizeof(float));
-
-    if (!data.sweep_signal || !data.recorded_signal) {
-        fprintf(stderr, "Failed to allocate memory\n");
+    
+    printf("=== Frequency Response Measurement via Deconvolution ===\n");
+    printf("Level normalization: %s\n\n", normalize_levels ? "ENABLED" : "DISABLED");
+    
+    // Load audio files
+    AudioBuffer reference = {0};
+    AudioBuffer recorded = {0};
+    
+    if (load_audio_file(ref_filename, &reference) != 0) {
         return 1;
     }
-
-//------------------------------------------------------------------------------
-//	Generate sweep signal
-//------------------------------------------------------------------------------
-    printf("Generating %d Hz to %d Hz logarithmic sweep (%.3f seconds)...\n",
-           (int)START_FREQ, (int)END_FREQ, actual_duration);
-    generate_log_sweep(data.sweep_signal, data.sweep_length, SAMPLE_RATE, START_FREQ, END_FREQ);
-
-//------------------------------------------------------------------------------
-//	Apply output level adjustment (prevent DAC clipping)
-//------------------------------------------------------------------------------
-    float level_linear = powf(10.0f, SWEEP_LEVEL_DB / 20.0f);
-    printf("Applying output level: %.1f dB (gain: %.3f)\n", SWEEP_LEVEL_DB, level_linear);
-    for (int i = 0; i < data.sweep_length; i++) {
-        data.sweep_signal[i] *= level_linear;
-    }
-
-//------------------------------------------------------------------------------
-//	Initialize PortAudio
-//------------------------------------------------------------------------------
-    err = Pa_Initialize();
-    if (err != paNoError) {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
+    
+    if (load_audio_file(rec_filename, &recorded) != 0) {
+        free_audio_buffer(&reference);
         return 1;
     }
-
-//------------------------------------------------------------------------------
-//	Open audio stream (duplex - both input and output)
-//------------------------------------------------------------------------------
-    err = Pa_OpenDefaultStream(&stream,
-                               1,											//	Input channels
-                               1,											//	Output channels
-                               paFloat32,									//	Sample format
-                               SAMPLE_RATE,
-                               FRAMES_PER_BUFFER,
-                               audioCallback,
-                               &data);
-
-    if (err != paNoError) {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-        Pa_Terminate();
+    
+    // Compute frequency response
+    double *freq_axis = NULL;
+    double *magnitude_db = NULL;
+    double *phase_deg = NULL;
+    size_t num_bins = 0;
+    
+    if (compute_frequency_response(&reference, &recorded, 
+                                   &freq_axis, &magnitude_db, 
+                                   &phase_deg, &num_bins, normalize_levels) != 0) {
+        free_audio_buffer(&reference);
+        free_audio_buffer(&recorded);
         return 1;
     }
-
-//------------------------------------------------------------------------------
-//	Start stream
-//------------------------------------------------------------------------------
-    printf("Starting measurement...\n");
-    printf("Make sure your audio interface input is connected to the output!\n\n");
-
-    err = Pa_StartStream(stream);
-    if (err != paNoError) {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-        Pa_CloseStream(stream);
-        Pa_Terminate();
+    
+    // Write results
+    if (write_csv(out_filename, freq_axis, magnitude_db, phase_deg, num_bins) != 0) {
+        free(freq_axis);
+        free(magnitude_db);
+        free(phase_deg);
+        free_audio_buffer(&reference);
+        free_audio_buffer(&recorded);
         return 1;
     }
-
-//------------------------------------------------------------------------------
-//	Wait for stream to complete
-//------------------------------------------------------------------------------
-    while (Pa_IsStreamActive(stream)) {
-        Pa_Sleep(100);
-        printf("\rProgress: %d / %d frames", data.current_frame, data.sweep_length);
-        fflush(stdout);
-    }
-    printf("\n\n");
-
-//------------------------------------------------------------------------------
-//	Stop and close stream
-//------------------------------------------------------------------------------
-    err = Pa_StopStream(stream);
-    if (err != paNoError) {
-        fprintf(stderr, "PortAudio error: %s\n", Pa_GetErrorText(err));
-    }
-
-    Pa_CloseStream(stream);
-    Pa_Terminate();
-
-    printf("Recording complete. Analyzing...\n");
-
-//------------------------------------------------------------------------------
-//	Calculate frequency response
-//------------------------------------------------------------------------------
-    calculate_frequency_response(data.sweep_signal, data.recorded_signal,
-                                 data.sweep_length, SAMPLE_RATE);
-
-//------------------------------------------------------------------------------
-//	Cleanup
-//------------------------------------------------------------------------------
-    free(data.sweep_signal);
-    free(data.recorded_signal);
-
-    printf("\nDone! Check frequency_response.csv for results.\n");
-    printf("You can plot this data with gnuplot, Python, or Excel.\n");
-
-    return 0;																//	Exit: status 0 (no error)
+    
+    // Print summary
+    print_summary(freq_axis, magnitude_db, num_bins, reference.sample_rate);
+    
+    // Cleanup
+    free(freq_axis);
+    free(magnitude_db);
+    free(phase_deg);
+    free_audio_buffer(&reference);
+    free_audio_buffer(&recorded);
+    
+    printf("\nDone!\n");
+    return 0;
 }
