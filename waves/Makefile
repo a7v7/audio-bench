@@ -30,7 +30,8 @@
 CC		= gcc
 MV		= mv
 RM		= rm -rf
-WAVE	= dlab_chirp --log --f_start=20 --f_end=20000 --db=-12 --time=10
+CHIRP	= dlab_chirp --log --f_start=20 --f_end=20000 --amp=-12 --time=10
+WAV_1K	= dlab_chirp --log --f_start=1000 --f_end=1000 --amp=-12 --time=10
 
 #-------------------------------------------------------------------------------
 # Export temp directory for Windows g++ compilation
@@ -64,5 +65,8 @@ clean:
 # All build artifacts
 #-------------------------------------------------------------------------------
 all:
-	$(WAVE) --rate=96000 --bits=24 --out=chirp_96k24b_10sec.wav
-	$(WAVE) --rate=48000 --bits=24 --out=chirp_48k24b_10sec.wav
+	$(CHIRP) --rate=96000 --bits=24 --out=chirp_96k24b_10sec.wav
+	$(CHIRP) --rate=48000 --bits=24 --out=chirp_48k24b_10sec.wav
+	$(WAV_1K) --rate=96000 --bits=24 --out=1kHz_96k24b_10sec.wav
+	$(WAV_1K) --rate=48000 --bits=24 --out=1kHz_48k24b_10sec.wav
+	
