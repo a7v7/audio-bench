@@ -67,10 +67,10 @@ VPATH	= src
 #-------------------------------------------------------------------------------
 # Main target - includes GUI app only on Windows
 #-------------------------------------------------------------------------------
+ALL_TARGETS = ab_acq ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft ab_check_levels
+
 ifeq ($(OS),Windows_NT)
-    ALL_TARGETS = ab_acq ab_audio_visualizer ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft ab_check_levels
-else
-    ALL_TARGETS = ab_acq ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft
+    ALL_TARGETS += ab_audio_visualizer
 endif
 
 all:	$(BIN_DIR) $(ALL_TARGETS)
