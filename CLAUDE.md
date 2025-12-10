@@ -24,34 +24,39 @@ audio-bench can be used in two distinct ways:
 ## Project Status
 
 **Note**: All C programs successfully build with the current Makefile. Python orchestration layer (`generate_report.py`) is partially implemented. Current source files include:
-- `ab_audio_analyze.c` - Basic peak/RMS analysis
-- `ab_acq.c` - Audio acquisition/recording from sound card
-- `ab_audio_visualizer.c` - Real-time audio waveform visualizer (Windows GUI, Stage 1 complete)
-- `ab_freq_response.c` - Frequency response analysis
-- `ab_wav_fft.c` - FFT-based frequency domain analysis with interval snapshot support
+- `ab_acq.c` - Audio acquisition/recording from sound card using PortAudio
+- `ab_audio_visualizer.c` - Real-time audio waveform visualizer (Windows GUI only, uses Windows GDI)
+- `ab_check_levels.c` - Utility to measure and compare levels of two audio files
+- `ab_freq_response.c` - Frequency response analysis using deconvolution
 - `ab_gain_calc.c` - Gain calculator for comparing two 1kHz wave files
-- `ab_thd_calc.c` - Total Harmonic Distortion (THD) calculator for sine waves
+- `ab_list_dev.c` - Lists audio devices (input/output) with filtering options using PortAudio
 - `ab_list_wav.c` - Lists WAV files in directory with properties
-- `ab_list_dev.c` - Lists audio devices (input/output) with filtering options
+- `ab_thd_calc.c` - Total Harmonic Distortion (THD) calculator for sine waves
+- `ab_wav_fft.c` - FFT-based frequency domain analysis with interval snapshot support
 
 **Python Scripts**:
 - `ab_project_create.py` - Creates organized project directory structures (✓ implemented)
 - `generate_report.py` - Report generation orchestration (partially implemented)
+- `mv2db.py` - Utility for converting measurements to dB
 
 ## Build System
 
-**Building:** Use `make` to compile all C programs. Binaries are placed in `bin/` directory, object files in `obj/`.
+**Building:** Use `make` to compile all C programs. Binaries are placed in `bin/` directory.
 
 ```bash
 make              # Build all programs
 make clean        # Remove build artifacts
 make install      # Install to /c/msys64/opt/audio-bench (Windows/MSYS2)
-                  # Copies binaries, gnuplot scripts, and Python scripts
+                  # Copies binaries, gnuplot scripts, Python scripts, and test waves
 make uninstall    # Remove installed files
 make help         # Show available make targets
 ```
 
 **Compiler flags:** The Makefile uses `-Wall -O2 -std=c11` with linking to `-lm -lsndfile -lfftw3 -lpopt -lportaudio`. All required libraries are linked by default.
+
+**Platform-specific notes:**
+- `ab_audio_visualizer` only builds on Windows (requires Windows GDI and uses `-mwindows -lgdi32 -lcomctl32` flags)
+- The `make install` target also runs `make -C waves clean all` to generate test signals (requires `dlab_chirp` utility)
 
 ## Key Dependencies
 
@@ -81,34 +86,41 @@ See docs/INSTALL.md for complete dependency installation instructions for all pl
    - Perform real-time analysis (peak detection, RMS calculation, FFT)
    - Output results in parseable text format
    - Available programs (all prefixed with `ab_`):
-     - `ab_audio_analyze` - Basic peak/RMS analysis with AudioStats structure
      - `ab_acq` - Audio acquisition/recording from sound card devices
      - `ab_audio_visualizer` - Real-time waveform visualizer with GUI (Windows only)
-     - `ab_freq_response` - Frequency response analysis
-     - `ab_wav_fft` - FFT-based frequency domain analysis with interval snapshot support
+     - `ab_check_levels` - Utility to measure and compare levels of two audio files
+     - `ab_freq_response` - Frequency response analysis using deconvolution
      - `ab_gain_calc` - Gain calculator for comparing two 1kHz wave files
-     - `ab_thd_calc` - Total Harmonic Distortion (THD) calculator for sine waves
-     - `ab_list_wav` - Lists WAV files in directory with their properties
      - `ab_list_dev` - Lists audio devices with input/output filtering
+     - `ab_list_wav` - Lists WAV files in directory with their properties
+     - `ab_thd_calc` - Total Harmonic Distortion (THD) calculator for sine waves
+     - `ab_wav_fft` - FFT-based frequency domain analysis with interval snapshot support
 
 2. **Python Orchestration** (scripts/): High-level workflow coordination
-   - `generate_report.py`: Main entry point for report generation
-   - Coordinates execution of C programs
-   - Processes multiple files
-   - Aggregates results into structured output
+   - `generate_report.py`: Main entry point for report generation (partially implemented)
+   - `ab_project_create.py`: Creates project directory structures for organized testing
+   - `mv2db.py`: Measurement conversion utilities
+   - Coordinates execution of C programs and aggregates results
 
 3. **Gnuplot Visualization** (gnuplot/): Graph generation
-   - Pre-configured plotting scripts for different metrics
+   - Pre-configured plotting scripts for different sample rates and bit depths
    - Uses pngcairo terminal for high-quality output
-   - Templates: `frequency_response.gp`, `thd.gp`
-   - Expects data files in specific format
+   - Templates include: `plot1_*.gp`, `plot2_*.gp`, `plot3_*.gp` (for 48kHz/96kHz, 16/24-bit)
+   - FFT display scripts: `fft_display_*.gp`
+   - Expects CSV data files from `ab_wav_fft` or similar tools
 
 ### Data Flow
 ```
-WAV file → C analysis programs → .dat files → gnuplot scripts → .png graphs
-                                            ↓
-                                    Python aggregation → report.md
+WAV file → C analysis programs → .csv/.dat files → gnuplot scripts → .png graphs
+                                                 ↓
+                                         Python aggregation → report.md
 ```
+
+**Common data structures across C programs:**
+- `AudioBuffer`: Standard structure for loaded audio data (data pointer, length, sample_rate, channels)
+- `LevelStats`: Audio level measurements (peak_pos, peak_neg, peak_dbfs, rms, rms_dbfs, crest_factor)
+- All programs use `libsndfile`'s SF_INFO for WAV file metadata
+- Programs typically mix multi-channel files to mono for analysis
 
 ## Project Directory Structure (Project-Driven Mode)
 
@@ -149,11 +161,11 @@ python scripts/generate_report.py --input test.wav --output report/ --skip-analy
 
 ### Direct Analysis Mode
 ```bash
-# Analyze single WAV file (basic peak/RMS analysis)
-./bin/ab_audio_analyze input.wav
+# Check audio levels (compare two files)
+./bin/ab_check_levels reference.wav measured.wav
 
-# With options
-./bin/ab_audio_analyze input.wav -o output.txt -V
+# Calculate gain between two 1kHz files
+./bin/ab_gain_calc reference.wav measured.wav
 
 # Run frequency response analysis
 ./bin/ab_freq_response input.wav
@@ -201,22 +213,24 @@ python scripts/generate_report.py --input test.wav --output report/ --skip-analy
 
 ### Creating Graphs
 ```bash
-# Generate individual graphs (from gnuplot/ directory or specify path)
-gnuplot gnuplot/frequency_response.gp
-gnuplot gnuplot/thd.gp
+# Generate graphs using gnuplot scripts (specify sample rate/bit depth version)
+gnuplot gnuplot/plot1_48k24b.gp
+gnuplot gnuplot/fft_display_48k16b.gp
 ```
 
-### Testing with Sample Data
+### Test Signal Generation
+The `waves/` directory contains a Makefile for generating standard test signals:
 ```bash
-# Process multiple test files (batch analysis)
-for file in tests/*.wav; do
-    ./bin/ab_audio_analyze "$file" -o "results/$(basename $file .wav).txt"
-done
-
-# Generate test signals with SoX (if available)
-sox -n -r 48000 -c 2 test_1khz.wav synth 5 sine 1000
-sox -n -r 48000 -c 2 sweep.wav synth 10 sine 20-20000
+cd waves
+make clean all    # Generate chirp and 1kHz test signals at various sample rates
+# Creates: chirp_48k24b_10sec.wav, chirp_96k24b_10sec.wav,
+#          1kHz_48k24b_10sec.wav, 1kHz_96k24b_10sec.wav
 ```
+
+**Note:** Requires `dlab_chirp` utility to be installed. These test signals are used for:
+- Frequency response testing (chirp signals)
+- Gain calibration (1kHz steady tones)
+- Loopback testing with ASIO interfaces
 
 ## Coding Standards
 
@@ -271,25 +285,25 @@ When implementing a new audio metric analyzer:
 
 ## File Organization
 
-- **src/**: C source files for audio analysis engines
-- **scripts/**: Python automation and report generation
-- **gnuplot/**: Visualization templates with .gp extension
+- **src/**: C source files for audio analysis engines (all ab_*.c files)
+- **scripts/**: Python automation and report generation scripts
+- **gnuplot/**: Visualization templates with .gp extension (organized by sample rate and bit depth)
+- **waves/**: Test signal generation with Makefile (creates chirp and 1kHz tones)
 - **bin/**: Compiled binaries (created by make, not in git)
-- **obj/**: Object files (created by make, not in git)
-- **data/**: Sample data and test files
-- **tests/**: Test files and test data
-- **examples/**: Usage examples and sample WAV files
-- **docs/**: Installation and contribution guidelines
+- **docs/**: Installation, contribution guidelines, and application notes
+  - **docs/app_notes/**: Application notes for specific hardware calibration and measurements
 
 ## Important Notes
 
-- The project is designed for cross-platform use (Linux, macOS, Windows/MSYS2)
+- The project is designed for cross-platform use (Linux, macOS, Windows/MSYS2), but `ab_audio_visualizer` is Windows-only
 - All audio I/O must go through libsndfile for format compatibility
-- **Binary naming convention**: All C programs use the `ab_` prefix (e.g., ab_audio_analyze, ab_acq)
-- **On Windows/MSYS2**: Binaries have `.exe` extension (e.g., `ab_audio_analyze.exe`)
-- All programs link with the same libraries: `-lm -lsndfile -lfftw3 -lpopt -lportaudio`
+- **Binary naming convention**: All C programs use the `ab_` prefix (e.g., ab_check_levels, ab_acq)
+- **On Windows/MSYS2**: Binaries have `.exe` extension (e.g., `ab_check_levels.exe`)
+- All programs link with the same base libraries: `-lm -lsndfile -lfftw3 -lpopt -lportaudio`
+  - `ab_audio_visualizer` additionally links with `-mwindows -lgdi32 -lcomctl32` (Windows GUI)
 - **Device enumeration**: Use `ab_list_dev` for listing audio devices; `ab_acq` is dedicated to recording only
-- Gnuplot scripts expect specific data file formats - maintain consistency
-- Python scripts check for tool dependencies before execution
-- C programs should handle mono and stereo audio files appropriately (see AudioStats structure in ab_audio_analyze.c)
-- Install location varies by platform: Linux/macOS use `/usr/local/bin`, Windows/MSYS2 uses `/c/msys64/opt/audio-bench`
+- Gnuplot scripts are organized by sample rate and bit depth (e.g., `plot1_48k24b.gp`, `fft_display_96k16b.gp`)
+- C programs typically mix multi-channel files to mono for analysis using simple averaging
+- Common data structures: `AudioBuffer` (general audio data), `LevelStats` (measurement results)
+- Install location varies by platform: Linux/macOS use `/opt/audio-bench`, Windows/MSYS2 uses `/c/msys64/opt/audio-bench`
+- After installation, set `AUDIO_BENCH=/opt/audio-bench` (or `/c/msys64/opt/audio-bench`) and add to PATH

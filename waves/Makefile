@@ -32,7 +32,7 @@ MV		= mv
 RM		= rm -rf
 CHIRP	= dlab_chirp --log --f_start=20 --f_end=20000 --amp=-12 --time=10
 WAV_1K	= dlab_chirp --log --f_start=1000 --f_end=1000 --amp=-12 --time=10
-
+NOISE	= dlab_pink_noise --amp=-12 --time=10
 #-------------------------------------------------------------------------------
 # Export temp directory for Windows g++ compilation
 #-------------------------------------------------------------------------------
@@ -69,4 +69,6 @@ all:
 	$(CHIRP) --rate=48000 --bits=24 --out=chirp_48k24b_10sec.wav
 	$(WAV_1K) --rate=96000 --bits=24 --out=1kHz_96k24b_10sec.wav
 	$(WAV_1K) --rate=48000 --bits=24 --out=1kHz_48k24b_10sec.wav
+	$(NOISE) --rate=96000 --bits=24 --out=noise_96k24b_10sec.wav
+	$(NOISE) --rate=48000 --bits=24 --out=noise_48k24b_10sec.wav
 	

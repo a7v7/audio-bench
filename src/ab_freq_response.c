@@ -29,6 +29,10 @@
 #include <sndfile.h>
 #include <fftw3.h>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 #define MIN_MAG_DB -120.0
 
 typedef struct {
@@ -196,14 +200,21 @@ int compute_frequency_response(AudioBuffer *reference, AudioBuffer *recorded,
     printf("Computing frequency response...\n");
     for (size_t i = 0; i < *num_bins; i++) {
         (*freq_axis)[i] = i * freq_resolution;
-        
-        // Get complex values
-        double complex X = ref_fft[i][0] + I * ref_fft[i][1];
-        double complex Y = rec_fft[i][0] + I * rec_fft[i][1];
-        
+
+        // Get complex values (accessing FFTW complex as [real, imag] pairs)
+        double X_real = ((double*)ref_fft)[2*i];
+        double X_imag = ((double*)ref_fft)[2*i + 1];
+        double Y_real = ((double*)rec_fft)[2*i];
+        double Y_imag = ((double*)rec_fft)[2*i + 1];
+
+        double complex X = X_real + I * X_imag;
+        double complex Y = Y_real + I * Y_imag;
+
         // Compute H = Y / X with regularization to avoid division by near-zero
         double X_mag = cabs(X);
-        double regularization = 1e-10 * cabs(rec_fft[0][0]); // Small fraction of DC
+        double DC_mag = sqrt(((double*)rec_fft)[0] * ((double*)rec_fft)[0] +
+                            ((double*)rec_fft)[1] * ((double*)rec_fft)[1]);
+        double regularization = 1e-10 * DC_mag; // Small fraction of DC
         
         double complex H;
         if (X_mag > regularization) {

@@ -67,7 +67,7 @@ VPATH	= src
 #-------------------------------------------------------------------------------
 # Main target - includes GUI app only on Windows
 #-------------------------------------------------------------------------------
-ALL_TARGETS = ab_acq ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft ab_check_levels
+ALL_TARGETS = ab_acq ab_gain_calc ab_list_dev ab_list_wav ab_thd_calc ab_wav_fft ab_check_levels ab_freq_response
 
 ifeq ($(OS),Windows_NT)
     ALL_TARGETS += ab_audio_visualizer
