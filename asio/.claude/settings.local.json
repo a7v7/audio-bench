@@ -17,7 +17,11 @@
       "Bash(./ab_list_dev.exe:*)",
       "Bash(../bin/ab_list_dev_asio.exe:*)",
       "Bash(../bin/ab_audio_analyze:*)",
-      "Bash(../bin/ab_asio_loopback.exe:*)"
+      "Bash(../bin/ab_asio_loopback.exe:*)",
+      "Bash(grep:*)",
+      "Bash(/c/dev/audio-bench/bin/ab_asio_playback.exe:*)",
+      "Bash(./ab_asio_playback.exe:*)",
+      "Bash(../bin/ab_asio_playback.exe:*)"
     ],
     "deny": [],
     "ask": []

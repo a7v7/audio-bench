@@ -64,6 +64,7 @@ ACQ_SRC = ab_acq_asio.cpp
 LIST_SRC = ab_list_dev_asio.cpp
 FREQ_RESP_SRC = ab_freq_response_asio.cpp
 LOOPBACK_SRC = ab_asio_loopback.cpp
+PLAYBACK_SRC = ab_asio_playback.cpp
 
 # ASIO SDK sources needed for host application
 ASIO_SOURCES = \
@@ -76,6 +77,7 @@ ACQ_OBJ = $(OBJ_DIR)/ab_acq_asio.o
 LIST_OBJ = $(OBJ_DIR)/ab_list_dev_asio.o
 FREQ_RESP_OBJ = $(OBJ_DIR)/ab_freq_response_asio.o
 LOOPBACK_OBJ = $(OBJ_DIR)/ab_asio_loopback.o
+PLAYBACK_OBJ = $(OBJ_DIR)/ab_asio_playback.o
 ASIO_OBJS = $(OBJ_DIR)/asio.o \
             $(OBJ_DIR)/asiodrivers.o \
             $(OBJ_DIR)/asiolist.o
@@ -87,12 +89,13 @@ TARGET_ACQ = ab_acq_asio.exe
 TARGET_LIST = ab_list_dev_asio.exe
 TARGET_FREQ_RESP = ab_freq_response_asio.exe
 TARGET_LOOPBACK = ab_asio_loopback.exe
-TARGETS = $(TARGET_ACQ) $(TARGET_LIST) $(TARGET_FREQ_RESP) $(TARGET_LOOPBACK)
+TARGET_PLAYBACK = ab_asio_playback.exe
+TARGETS = $(TARGET_ACQ) $(TARGET_LIST) $(TARGET_FREQ_RESP) $(TARGET_LOOPBACK) $(TARGET_PLAYBACK)
 
 #-------------------------------------------------------------------------------
 # Main target
 #-------------------------------------------------------------------------------
-all: $(BIN_DIR)/$(TARGET_ACQ) $(BIN_DIR)/$(TARGET_LIST) $(BIN_DIR)/$(TARGET_FREQ_RESP) $(BIN_DIR)/$(TARGET_LOOPBACK)
+all: $(BIN_DIR)/$(TARGET_ACQ) $(BIN_DIR)/$(TARGET_LIST) $(BIN_DIR)/$(TARGET_FREQ_RESP) $(BIN_DIR)/$(TARGET_LOOPBACK) $(BIN_DIR)/$(TARGET_PLAYBACK)
 
 #-------------------------------------------------------------------------------
 # Build executables
@@ -113,6 +116,10 @@ $(BIN_DIR)/$(TARGET_LOOPBACK): $(LOOPBACK_OBJ) $(ASIO_OBJS) | $(BIN_DIR)
 	$(CXX) $(LOOPBACK_OBJ) $(ASIO_OBJS) -lm -lole32 -loleaut32 -lpopt -lsndfile -o $@
 	@echo "Built: $@"
 
+$(BIN_DIR)/$(TARGET_PLAYBACK): $(PLAYBACK_OBJ) $(ASIO_OBJS) | $(BIN_DIR)
+	$(CXX) $(PLAYBACK_OBJ) $(ASIO_OBJS) -lm -lole32 -loleaut32 -lpopt -lsndfile -o $@
+	@echo "Built: $@"
+
 #-------------------------------------------------------------------------------
 # Compile main sources
 #-------------------------------------------------------------------------------
@@ -126,6 +133,9 @@ $(OBJ_DIR)/ab_freq_response_asio.o: ab_freq_response_asio.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJ_DIR)/ab_asio_loopback.o: ab_asio_loopback.cpp | $(OBJ_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/ab_asio_playback.o: ab_asio_playback.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 #-------------------------------------------------------------------------------
@@ -158,6 +168,7 @@ clean:
 	$(RM) $(BIN_DIR)/$(TARGET_LIST)
 	$(RM) $(BIN_DIR)/$(TARGET_FREQ_RESP)
 	$(RM) $(BIN_DIR)/$(TARGET_LOOPBACK)
+	$(RM) $(BIN_DIR)/$(TARGET_PLAYBACK)
 	@echo "Cleaned build artifacts"
 
 #-------------------------------------------------------------------------------
@@ -178,6 +189,7 @@ help:
 	@echo "              - ab_list_dev_asio.exe (device listing)"
 	@echo "              - ab_freq_response_asio.exe (frequency response measurement)"
 	@echo "              - ab_asio_loopback.exe (audio loopback playback/recording)"
+	@echo "              - ab_asio_playback.exe (audio playback)"
 	@echo "  clean     - Remove build artifacts"
 	@echo "  install   - Note about installation"
 	@echo "  help      - Show this help message"
@@ -187,7 +199,7 @@ help:
 	@echo "  - g++ compiler with C++11 support"
 	@echo "  - Windows platform (MSYS2/MinGW)"
 	@echo "  - FFTW3 library (for frequency response tool)"
-	@echo "  - libsndfile library (for loopback tool)"
+	@echo "  - libsndfile library (for loopback and playback tools)"
 
 #-------------------------------------------------------------------------------
 # Phony targets
